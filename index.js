@@ -178,16 +178,74 @@ bot.hears(['🍽 Ճաշացուցակ', '🍽 Меню', '🍽 Menu'], async (ct
     return ctx.reply(getTranslation(lang, 'emptyMenu'));
   }
   
-  const keyboard = [];
+  const categoriesSet = new Set();
   for (const item of items) {
+    let categoryName = item.category;
+    if (lang === 'ru' && item.categoryRu) categoryName = item.categoryRu;
+    if (lang === 'en' && item.categoryEn) categoryName = item.categoryEn;
+    categoriesSet.add(categoryName);
+  }
+  
+  const categories = Array.from(categoriesSet);
+  const keyboard = [];
+  for (let i = 0; i < categories.length; i += 2) {
+    const row = [];
+    row.push(Markup.button.callback(categories[i], `cat_${i}_${city}`));
+    if (i + 1 < categories.length) {
+      row.push(Markup.button.callback(categories[i + 1], `cat_${i + 1}_${city}`));
+    }
+    keyboard.push(row);
+  }
+  keyboard.push([Markup.button.callback('🔙 Հետ', 'back_to_main')]);
+  
+  await ctx.reply('📂 *Ընտրիր կատեգորիա:*', {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard(keyboard)
+  });
+});
+
+bot.action(/cat_(\d+)_(.+)/, async (ctx) => {
+  const categoryIndex = parseInt(ctx.match[1]);
+  const city = ctx.match[2];
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const items = await db.select().from(menuItems).where(eq(menuItems.city, city));
+  
+  let categoryName = null;
+  const categoriesSet = new Set();
+  const categoryMap = new Map();
+  for (const item of items) {
+    let catDisplay = item.category;
+    if (lang === 'ru' && item.categoryRu) catDisplay = item.categoryRu;
+    if (lang === 'en' && item.categoryEn) catDisplay = item.categoryEn;
+    categoriesSet.add(catDisplay);
+    categoryMap.set(catDisplay, item.category);
+  }
+  const categories = Array.from(categoriesSet);
+  const selectedCategory = categories[categoryIndex];
+  const originalCategory = categoryMap.get(selectedCategory);
+  
+  const categoryItems = items.filter(item => item.category === originalCategory);
+  
+  if (categoryItems.length === 0) {
+    return ctx.reply('📭 Այս կատեգորիայում ուտեստ չկա');
+  }
+  
+  const keyboard = [];
+  for (const item of categoryItems) {
     let name = item.name;
     if (lang === 'ru' && item.nameRu) name = item.nameRu;
     if (lang === 'en' && item.nameEn) name = item.nameEn;
     keyboard.push([Markup.button.callback(`${name} - ${item.price} ֏`, `add_${item.id}`)]);
   }
-  keyboard.push([Markup.button.callback('🛒 Ցույց տալ զամբյուղը', 'show_cart')]);
+  keyboard.push([Markup.button.callback('◀️ Վերադառնալ կատեգորիաներին', 'back_to_categories')]);
   
-  await ctx.reply('Ընտրիր ուտեստը:', Markup.inlineKeyboard(keyboard));
+  await ctx.reply(`🍽 *${selectedCategory}*\n\nԸնտրիր ուտեստը:`, {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard(keyboard)
+  });
+  await ctx.answerCbQuery();
 });
 
 bot.action(/add_(\d+)/, async (ctx) => {
@@ -218,6 +276,43 @@ bot.action(/add_(\d+)/, async (ctx) => {
     console.error('Add to cart error:', err);
     await ctx.answerCbQuery('Սխալ, փորձեք կրկին').catch(() => {});
   }
+});
+
+bot.action('back_to_categories', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  const city = user?.city || 'yerevan';
+  
+  const items = await db.select().from(menuItems).where(eq(menuItems.city, city));
+  if (items.length === 0) {
+    return ctx.reply(getTranslation(lang, 'emptyMenu'));
+  }
+  
+  const categoriesSet = new Set();
+  for (const item of items) {
+    let categoryName = item.category;
+    if (lang === 'ru' && item.categoryRu) categoryName = item.categoryRu;
+    if (lang === 'en' && item.categoryEn) categoryName = item.categoryEn;
+    categoriesSet.add(categoryName);
+  }
+  
+  const categories = Array.from(categoriesSet);
+  const keyboard = [];
+  for (let i = 0; i < categories.length; i += 2) {
+    const row = [];
+    row.push(Markup.button.callback(categories[i], `cat_${i}_${city}`));
+    if (i + 1 < categories.length) {
+      row.push(Markup.button.callback(categories[i + 1], `cat_${i + 1}_${city}`));
+    }
+    keyboard.push(row);
+  }
+  keyboard.push([Markup.button.callback('🔙 Հետ', 'back_to_main')]);
+  
+  await ctx.reply('📂 *Ընտրիր կատեգորիա:*', {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard(keyboard)
+  });
+  await ctx.answerCbQuery();
 });
 
 bot.action('show_cart', async (ctx) => {
@@ -790,6 +885,13 @@ bot.action('delete_partner', async (ctx) => {
 bot.action('back_to_admin', async (ctx) => {
   if (!await isAdmin(ctx)) return;
   await showAdminPanel(ctx);
+  await ctx.answerCbQuery();
+});
+
+bot.action('back_to_main', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  await ctx.reply('🔙 Վերադարձ գլխավոր մենյու', mainMenu(lang));
   await ctx.answerCbQuery();
 });
 
