@@ -281,20 +281,36 @@ bot.action('checkout', async (ctx) => {
     
     ctx.session.checkout = { cart, total, maxBonus };
     
+    const cancelButton = Markup.inlineKeyboard([
+      [Markup.button.callback('❌ Չեղարկել պատվերը', 'cancel_checkout')]
+    ]);
+    
     if (maxBonus === 0) {
       ctx.session.checkout.bonusToUse = 0;
       ctx.session.waitingForBonus = false;
       ctx.session.waitingForAddress = true;
-      await ctx.reply(`Պատվերի գումարը: ${total} ֏\nԴուք չունեք բոնուսներ:\nՆշեք առաքման հասցեն (կամ գրեք "ինքնուրույն վերցնել"):`);
+      await ctx.reply(`Պատվերի գումարը: ${total} ֏\nԴուք չունեք բոնուսներ:\nՆշեք առաքման հասցեն (կամ գրեք "ինքնուրույն վերցնել"):`, cancelButton);
     } else {
       ctx.session.waitingForBonus = true;
-      await ctx.reply(`Պատվերի գումարը: ${total} ֏\nԿարող եք օգտագործել մինչև ${maxBonus} բոնուս:\nՈրքա՞ն բոնուս եք ուզում օգտագործել (0-${maxBonus}):`);
+      await ctx.reply(`Պատվերի գումարը: ${total} ֏\nԿարող եք օգտագործել մինչև ${maxBonus} բոնուս:\nՈրքա՞ն բոնուս եք ուզում օգտագործել (0-${maxBonus}):`, cancelButton);
     }
     await ctx.answerCbQuery().catch(() => {});
   } catch (err) {
     console.error('Checkout error:', err);
     await ctx.answerCbQuery('Սխալ').catch(() => {});
   }
+});
+
+bot.action('cancel_checkout', async (ctx) => {
+  ctx.session.checkout = null;
+  ctx.session.waitingForBonus = false;
+  ctx.session.waitingForAddress = false;
+  ctx.session.waitingForPhone = false;
+  ctx.session.cart = [];
+  
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  await ctx.reply('❌ Պատվերը չեղարկվեց:', mainMenu(user.language));
+  await ctx.answerCbQuery();
 });
 
 bot.on('text', async (ctx, next) => {
@@ -691,9 +707,9 @@ bot.hears('👥 Օգտատերեր', async (ctx) => {
   await showUsers(ctx);
 });
 
-bot.hears('🔙 Հետ', async (ctx) => {
-  if (!await isAdmin(ctx)) return;
-  await showAdminPanel(ctx);
+bot.hears('🏠 Գլխավոր մենյու', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  ctx.reply('Գլխավոր մենյու', mainMenu(user.language));
 });
 
 bot.command('admin', async (ctx) => {
