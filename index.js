@@ -32,16 +32,9 @@ app.get('/', (req, res) => {
   res.send('SB Loyalty Bot is running!');
 });
 
-app.get('/health', (req, res) => {
-  res.status(200).send('OK');
-});
-
-const server = app.listen(port, '0.0.0.0', () => {
+app.listen(port, () => {
   console.log(`✅ HTTP server running on port ${port}`);
 });
-
-server.keepAliveTimeout = 65000;
-server.headersTimeout = 66000;
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 bot.use(new LocalSession({ database: 'session_db.json' }).middleware());
@@ -287,8 +280,16 @@ bot.action('checkout', async (ctx) => {
     const maxBonus = calculateBonusToUse(total, user.bonusBalance);
     
     ctx.session.checkout = { cart, total, maxBonus };
-    ctx.session.waitingForBonus = true;
-    await ctx.reply(`Պատվերի գումարը: ${total} ֏\nԿարող եք օգտագործել մինչև ${maxBonus} բոնուս:\nՈրքա՞ն բոնուս եք ուզում օգտագործել (0-${maxBonus}):`);
+    
+    if (maxBonus === 0) {
+      ctx.session.checkout.bonusToUse = 0;
+      ctx.session.waitingForBonus = false;
+      ctx.session.waitingForAddress = true;
+      await ctx.reply(`Պատվերի գումարը: ${total} ֏\nԴուք չունեք բոնուսներ:\nՆշեք առաքման հասցեն (կամ գրեք "ինքնուրույն վերցնել"):`);
+    } else {
+      ctx.session.waitingForBonus = true;
+      await ctx.reply(`Պատվերի գումարը: ${total} ֏\nԿարող եք օգտագործել մինչև ${maxBonus} բոնուս:\nՈրքա՞ն բոնուս եք ուզում օգտագործել (0-${maxBonus}):`);
+    }
     await ctx.answerCbQuery().catch(() => {});
   } catch (err) {
     console.error('Checkout error:', err);
