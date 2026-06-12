@@ -52,8 +52,8 @@ function mainMenu(lang) {
     [t('menu'), t('bonus')],
     [t('referral'), t('myOrders')],
     [t('changeCity'), t('changeLanguage')],
-    ['🏢 Գործընկերներ', '🛒 Զամբյուղ'],
-    ['📊 Իմ վիճակագրություն']
+    [t('partners'), t('cart')],
+    [t('myStats')]
   ]).resize();
 }
 
@@ -87,7 +87,7 @@ async function registerUser(telegramId, firstName, lastName, username, invitedBy
     lastName,
     username,
     invitedBy: invitedBy || null,
-    language: 'hy',
+    language: null,
     city: 'yerevan',
     bonusBalance: 0,
     frozenBonus: 0,
@@ -141,26 +141,29 @@ bot.start(async (ctx) => {
   if (ctx.startPayload && ctx.startPayload.startsWith('ref_')) {
     refUserId = parseInt(ctx.startPayload.split('_')[1]);
   }
+  
   const user = await registerUser(ctx.from.id, ctx.from.first_name, ctx.from.last_name, ctx.from.username, refUserId);
   
-  const welcomeAllText = getTranslation('hy', 'welcomeAll');
-  await ctx.reply(welcomeAllText, { parse_mode: 'Markdown' });
-  
-  const languageKeyboard = Markup.keyboard([['Հայերեն', 'Русский', 'English']]).resize();
-  await ctx.reply('🌐 Ընտրիր լեզու / Выбери язык / Choose language:', languageKeyboard);
+  if (!user.language) {
+    const languageKeyboard = Markup.keyboard([['Հայերեն', 'Русский', 'English']]).resize();
+    await ctx.reply(getTranslation('hy', 'chooseLanguage'), languageKeyboard);
+  } else {
+    const welcomeText = getTranslation(user.language, 'welcome');
+    await ctx.reply(welcomeText, { parse_mode: 'Markdown', reply_markup: mainMenu(user.language).reply_markup });
+  }
 });
 
-bot.hears(['🏢 Գործընկերներ', '🏢 Партнеры', '🏢 Partners'], async (ctx) => {
+bot.hears([getTranslation('hy', 'partners'), getTranslation('ru', 'partners'), getTranslation('en', 'partners')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
   
   const partnersList = await db.select().from(partners).where(eq(partners.isActive, true));
   
   if (partnersList.length === 0) {
-    return ctx.reply('📭 Դեռևս գործընկերներ չկան');
+    return ctx.reply(getTranslation(lang, 'noPartners'));
   }
   
-  let text = '🏢 *ՄԵՐ ԳՈՐԾԸՆԿԵՐՆԵՐԸ*\n\n';
+  let text = getTranslation(lang, 'partnersTitle') + '\n\n';
   for (let p of partnersList) {
     let name = p.name;
     if (lang === 'ru' && p.nameRu) name = p.nameRu;
@@ -169,13 +172,13 @@ bot.hears(['🏢 Գործընկերներ', '🏢 Партнеры', '🏢 Partn
     if (p.description) text += `${p.description}\n`;
     if (p.address) text += `📍 ${p.address}\n`;
     if (p.phone) text += `📞 ${p.phone}\n`;
-    text += `💰 Բոնուս: ${p.commission}%\n\n`;
+    text += getTranslation(lang, 'partnersBonus', p.commission) + '\n\n';
   }
   
   ctx.reply(text, { parse_mode: 'Markdown' });
 });
 
-bot.hears(['🍽 Ճաշացուցակ', '🍽 Меню', '🍽 Menu'], async (ctx) => {
+bot.hears([getTranslation('hy', 'menu'), getTranslation('ru', 'menu'), getTranslation('en', 'menu')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
   const city = user?.city || 'yerevan';
@@ -185,16 +188,74 @@ bot.hears(['🍽 Ճաշացուցակ', '🍽 Меню', '🍽 Menu'], async (ct
     return ctx.reply(getTranslation(lang, 'emptyMenu'));
   }
   
-  const keyboard = [];
+  const categoriesSet = new Set();
   for (const item of items) {
+    let categoryName = item.category;
+    if (lang === 'ru' && item.categoryRu) categoryName = item.categoryRu;
+    if (lang === 'en' && item.categoryEn) categoryName = item.categoryEn;
+    categoriesSet.add(categoryName);
+  }
+  
+  const categories = Array.from(categoriesSet);
+  const keyboard = [];
+  for (let i = 0; i < categories.length; i += 2) {
+    const row = [];
+    row.push(Markup.button.callback(categories[i], `cat_${i}_${city}`));
+    if (i + 1 < categories.length) {
+      row.push(Markup.button.callback(categories[i + 1], `cat_${i + 1}_${city}`));
+    }
+    keyboard.push(row);
+  }
+  keyboard.push([Markup.button.callback(getTranslation(lang, 'back'), 'back_to_main')]);
+  
+  await ctx.reply(getTranslation(lang, 'categoriesTitle'), {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard(keyboard)
+  });
+});
+
+bot.action(/cat_(\d+)_(.+)/, async (ctx) => {
+  const categoryIndex = parseInt(ctx.match[1]);
+  const city = ctx.match[2];
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const items = await db.select().from(menuItems).where(eq(menuItems.city, city));
+  
+  let categoryName = null;
+  const categoriesSet = new Set();
+  const categoryMap = new Map();
+  for (const item of items) {
+    let catDisplay = item.category;
+    if (lang === 'ru' && item.categoryRu) catDisplay = item.categoryRu;
+    if (lang === 'en' && item.categoryEn) catDisplay = item.categoryEn;
+    categoriesSet.add(catDisplay);
+    categoryMap.set(catDisplay, item.category);
+  }
+  const categories = Array.from(categoriesSet);
+  const selectedCategory = categories[categoryIndex];
+  const originalCategory = categoryMap.get(selectedCategory);
+  
+  const categoryItems = items.filter(item => item.category === originalCategory);
+  
+  if (categoryItems.length === 0) {
+    return ctx.reply(getTranslation(lang, 'categoryEmpty'));
+  }
+  
+  const keyboard = [];
+  for (const item of categoryItems) {
     let name = item.name;
     if (lang === 'ru' && item.nameRu) name = item.nameRu;
     if (lang === 'en' && item.nameEn) name = item.nameEn;
     keyboard.push([Markup.button.callback(`${name} - ${item.price} ֏`, `add_${item.id}`)]);
   }
-  keyboard.push([Markup.button.callback('🛒 Ցույց տալ զամբյուղը', 'show_cart')]);
+  keyboard.push([Markup.button.callback(getTranslation(lang, 'backToCategories'), 'back_to_categories')]);
   
-  await ctx.reply('Ընտրիր ուտեստը:', Markup.inlineKeyboard(keyboard));
+  await ctx.reply(`🍽 *${selectedCategory}*\n\n${getTranslation(lang, 'selectItem')}`, {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard(keyboard)
+  });
+  await ctx.answerCbQuery();
 });
 
 bot.action(/add_(\d+)/, async (ctx) => {
@@ -220,11 +281,48 @@ bot.action(/add_(\d+)/, async (ctx) => {
         quantity: 1
       });
     }
-    await ctx.answerCbQuery(`✅ ${item.name} ավելացվեց`).catch(() => {});
+    await ctx.answerCbQuery(getTranslation('hy', 'itemAdded', item.name)).catch(() => {});
   } catch (err) {
     console.error('Add to cart error:', err);
     await ctx.answerCbQuery('Սխալ, փորձեք կրկին').catch(() => {});
   }
+});
+
+bot.action('back_to_categories', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  const city = user?.city || 'yerevan';
+  
+  const items = await db.select().from(menuItems).where(eq(menuItems.city, city));
+  if (items.length === 0) {
+    return ctx.reply(getTranslation(lang, 'emptyMenu'));
+  }
+  
+  const categoriesSet = new Set();
+  for (const item of items) {
+    let categoryName = item.category;
+    if (lang === 'ru' && item.categoryRu) categoryName = item.categoryRu;
+    if (lang === 'en' && item.categoryEn) categoryName = item.categoryEn;
+    categoriesSet.add(categoryName);
+  }
+  
+  const categories = Array.from(categoriesSet);
+  const keyboard = [];
+  for (let i = 0; i < categories.length; i += 2) {
+    const row = [];
+    row.push(Markup.button.callback(categories[i], `cat_${i}_${city}`));
+    if (i + 1 < categories.length) {
+      row.push(Markup.button.callback(categories[i + 1], `cat_${i + 1}_${city}`));
+    }
+    keyboard.push(row);
+  }
+  keyboard.push([Markup.button.callback(getTranslation(lang, 'back'), 'back_to_main')]);
+  
+  await ctx.reply(getTranslation(lang, 'categoriesTitle'), {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard(keyboard)
+  });
+  await ctx.answerCbQuery();
 });
 
 bot.action('show_cart', async (ctx) => {
@@ -233,28 +331,28 @@ bot.action('show_cart', async (ctx) => {
     const lang = user?.language || 'hy';
     const cart = ctx.session.cart || [];
     if (cart.length === 0) {
-      await ctx.answerCbQuery('Զամբյուղը դատարկ է').catch(() => {});
+      await ctx.answerCbQuery(getTranslation(lang, 'cartEmpty')).catch(() => {});
       return;
     }
     
     let total = 0;
-    let text = '🛒 *Ձեր զամբյուղը*\n\n';
+    let text = getTranslation(lang, 'cartTitle') + '\n\n';
     for (let item of cart) {
       let name = item.name;
       if (lang === 'ru' && item.nameRu) name = item.nameRu;
       if (lang === 'en' && item.nameEn) name = item.nameEn;
       const subtotal = item.price * item.quantity;
       total += subtotal;
-      text += `${name} x${item.quantity} — ${subtotal} ֏\n`;
+      text += getTranslation(lang, 'cartItem', name, item.quantity, subtotal) + '\n';
     }
-    text += `\n💰 *Ընդամենը:* ${total} ֏`;
+    text += `\n${getTranslation(lang, 'cartTotal')} ${total} ֏`;
     
     const maxBonus = calculateBonusToUse(total, user.bonusBalance);
-    text += `\n⭐ *Կարող եք օգտագործել մինչև:* ${maxBonus} բոնուս`;
+    text += `\n${getTranslation(lang, 'cartBonusHint', maxBonus)}`;
     
     const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('✅ Ձևակերպել պատվեր', 'checkout')],
-      [Markup.button.callback('🗑 Մաքրել զամբյուղը', 'clear_cart')]
+      [Markup.button.callback(getTranslation(lang, 'checkoutConfirm'), 'checkout')],
+      [Markup.button.callback(getTranslation(lang, 'clearCart'), 'clear_cart')]
     ]);
     await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
     await ctx.answerCbQuery().catch(() => {});
@@ -267,7 +365,7 @@ bot.action('show_cart', async (ctx) => {
 bot.action('clear_cart', async (ctx) => {
   try {
     ctx.session.cart = [];
-    await ctx.answerCbQuery('Զամբյուղը մաքրվեց').catch(() => {});
+    await ctx.answerCbQuery(getTranslation('hy', 'clearCart')).catch(() => {});
     await ctx.deleteMessage();
   } catch (err) {
     console.error('Clear cart error:', err);
@@ -279,7 +377,7 @@ bot.action('checkout', async (ctx) => {
     const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
     const cart = ctx.session.cart || [];
     if (cart.length === 0) {
-      await ctx.answerCbQuery('Զամբյուղը դատարկ է').catch(() => {});
+      await ctx.answerCbQuery(getTranslation(user.language, 'cartEmpty')).catch(() => {});
       return;
     }
     let total = 0;
@@ -287,13 +385,37 @@ bot.action('checkout', async (ctx) => {
     const maxBonus = calculateBonusToUse(total, user.bonusBalance);
     
     ctx.session.checkout = { cart, total, maxBonus };
-    ctx.session.waitingForBonus = true;
-    await ctx.reply(`Պատվերի գումարը: ${total} ֏\nԿարող եք օգտագործել մինչև ${maxBonus} բոնուս:\nՈրքա՞ն բոնուս եք ուզում օգտագործել (0-${maxBonus}):`);
+    
+    const cancelButton = Markup.inlineKeyboard([
+      [Markup.button.callback(getTranslation(user.language, 'cancelOrder'), 'cancel_checkout')]
+    ]);
+    
+    if (maxBonus === 0) {
+      ctx.session.checkout.bonusToUse = 0;
+      ctx.session.waitingForBonus = false;
+      ctx.session.waitingForAddress = true;
+      await ctx.reply(getTranslation(user.language, 'noBonus', total), cancelButton);
+    } else {
+      ctx.session.waitingForBonus = true;
+      await ctx.reply(getTranslation(user.language, 'askBonus', total, maxBonus), cancelButton);
+    }
     await ctx.answerCbQuery().catch(() => {});
   } catch (err) {
     console.error('Checkout error:', err);
     await ctx.answerCbQuery('Սխալ').catch(() => {});
   }
+});
+
+bot.action('cancel_checkout', async (ctx) => {
+  ctx.session.checkout = null;
+  ctx.session.waitingForBonus = false;
+  ctx.session.waitingForAddress = false;
+  ctx.session.waitingForPhone = false;
+  ctx.session.cart = [];
+  
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  await ctx.reply(getTranslation(user.language, 'orderCancelled'), mainMenu(user.language));
+  await ctx.answerCbQuery();
 });
 
 bot.on('text', async (ctx, next) => {
@@ -303,12 +425,12 @@ bot.on('text', async (ctx, next) => {
   if (ctx.session.waitingForBonus) {
     const bonusInput = parseInt(ctx.message.text);
     if (isNaN(bonusInput) || bonusInput < 0 || bonusInput > ctx.session.checkout.maxBonus) {
-      return ctx.reply(`Սխալ թիվ: Գրեք 0-ից ${ctx.session.checkout.maxBonus} միջակայքում`);
+      return ctx.reply(getTranslation(user.language, 'invalidNumber', 0, ctx.session.checkout.maxBonus));
     }
     ctx.session.checkout.bonusToUse = bonusInput;
     ctx.session.waitingForBonus = false;
     ctx.session.waitingForAddress = true;
-    return ctx.reply('Նշեք առաքման հասցեն (կամ գրեք "ինքնուրույն վերցնել"):');
+    return ctx.reply(getTranslation(user.language, 'askAddress'));
   }
   
   if (ctx.session.waitingForAddress) {
@@ -318,7 +440,7 @@ bot.on('text', async (ctx, next) => {
     
     if (!user.phoneVerified) {
       ctx.session.waitingForPhone = true;
-      return ctx.reply('📱 Խնդրում եմ գրեք ձեր հեռախոսահամարը +374 ձևաչափով:\nՕրինակ: +374XXXXXXXX');
+      return ctx.reply(getTranslation(user.language, 'askPhone'));
     }
     
     const { cart, total, bonusToUse, address: savedAddress } = ctx.session.checkout;
@@ -341,14 +463,14 @@ bot.on('text', async (ctx, next) => {
     ctx.session.cart = [];
     ctx.session.checkout = null;
     
-    ctx.reply(`✅ Պատվերը ուղարկվեց հաստատման №${newOrder[0].id}\n💸 Վճարված: ${finalTotal} ֏\n⏳ Սպասեք ադմինի հաստատմանը`);
+    ctx.reply(getTranslation(user.language, 'orderSent', newOrder[0].id, finalTotal));
     return;
   }
   
   if (ctx.session.waitingForPhone) {
     const phone = ctx.message.text.trim();
     if (!validatePhone(phone)) {
-      return ctx.reply('❌ Սխալ ձևաչափ: Խնդրում եմ գրեք +374XXXXXXXX ձևաչափով:\nՕրինակ: +374XXXXXXXX');
+      return ctx.reply(getTranslation(user.language, 'invalidPhone'));
     }
     await db.update(users).set({ phone: phone, phoneVerified: true }).where(eq(users.telegramId, ctx.from.id));
     ctx.session.waitingForPhone = false;
@@ -373,7 +495,7 @@ bot.on('text', async (ctx, next) => {
     ctx.session.cart = [];
     ctx.session.checkout = null;
     
-    ctx.reply(`✅ Պատվերը ուղարկվեց հաստատման №${newOrder[0].id}\n💸 Վճարված: ${finalTotal} ֏\n⏳ Սպասեք ադմինի հաստատմանը`);
+    ctx.reply(getTranslation(user.language, 'orderSent', newOrder[0].id, finalTotal));
     return;
   }
   
@@ -489,56 +611,64 @@ bot.on('text', async (ctx, next) => {
   await next();
 });
 
-bot.hears(['🛒 Զամբյուղ', '🛒 Корзина', '🛒 Cart', '🛒 Զամբյուղ / Корзина / Cart'], async (ctx) => {
+bot.hears([getTranslation('hy', 'cart'), getTranslation('ru', 'cart'), getTranslation('en', 'cart')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
   const cart = ctx.session.cart || [];
   if (cart.length === 0) {
-    return ctx.reply('🛒 Զամբյուղը դատարկ է');
+    return ctx.reply(getTranslation(lang, 'cartEmpty'));
   }
   
   let total = 0;
-  let text = '🛒 *Ձեր զամբյուղը*\n\n';
+  let text = getTranslation(lang, 'cartTitle') + '\n\n';
   for (let item of cart) {
     let name = item.name;
     if (lang === 'ru' && item.nameRu) name = item.nameRu;
     if (lang === 'en' && item.nameEn) name = item.nameEn;
     const subtotal = item.price * item.quantity;
     total += subtotal;
-    text += `${name} x${item.quantity} — ${subtotal} ֏\n`;
+    text += getTranslation(lang, 'cartItem', name, item.quantity, subtotal) + '\n';
   }
-  text += `\n💰 *Ընդամենը:* ${total} ֏`;
+  text += `\n${getTranslation(lang, 'cartTotal')} ${total} ֏`;
   
   const maxBonus = calculateBonusToUse(total, user.bonusBalance);
-  text += `\n⭐ *Կարող եք օգտագործել մինչև:* ${maxBonus} բոնուս`;
+  text += `\n${getTranslation(lang, 'cartBonusHint', maxBonus)}`;
   
   const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('✅ Ձևակերպել պատվեր', 'checkout')],
-    [Markup.button.callback('🗑 Մաքրել զամբյուղը', 'clear_cart')]
+    [Markup.button.callback(getTranslation(lang, 'checkoutConfirm'), 'checkout')],
+    [Markup.button.callback(getTranslation(lang, 'clearCart'), 'clear_cart')]
   ]);
   await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
 });
 
-bot.hears(['⭐ Բոնուսներ', '⭐ Бонусы', '⭐ Bonuses'], async (ctx) => {
+bot.hears([getTranslation('hy', 'bonus'), getTranslation('ru', 'bonus'), getTranslation('en', 'bonus')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const t = (key, ...args) => getTranslation(user.language, key, ...args);
   ctx.reply(t('bonusText', user?.bonusBalance || 0, user?.frozenBonus || 0), { parse_mode: 'HTML' });
 });
-bot.hears(['👥 Ռեֆերալ', '👥 Рефералы', '👥 Referral'], async (ctx) => {
+
+bot.hears([getTranslation('hy', 'referral'), getTranslation('ru', 'referral'), getTranslation('en', 'referral')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
   const refLink = `https://t.me/${ctx.botInfo.username}?start=ref_${user.id}`;
   
   const referrals = await db.select().from(users).where(eq(users.invitedBy, user.id));
   let referralsText = '';
   if (referrals.length > 0) {
-    referralsText = '\n\n👥 *Ձեր հրավիրածները:*\n';
+    referralsText = `\n\n👥 *${getTranslation(lang, 'referralFriends', referrals.length)}*\n`;
     for (let ref of referrals) {
       referralsText += `• ${ref.firstName || ref.username || ref.telegramId}\n`;
     }
   }
   
-  ctx.reply(`<b>👥 Ռեֆերալային ծրագիր</b>\n\n🔗 Ձեր հղումը:\n \n<code>${refLink}</code>\n\n📊 Բոնուսներ:\n• 1% - 1-ին մակարդակ\n• 0.5% - 2-րդ մակարդակ\n• 0.25% - 3-րդ մակարդակ${referralsText}\n\n💡 Հղումը պատճենելու համար պարզապես սեղմեք հղման վրա`, { parse_mode: 'HTML' });
+  const hint = getTranslation(lang, 'referralCopyHint');
+  
+  ctx.reply(
+    `${getTranslation(lang, 'referralText', refLink)}\n${referralsText}\n\n💡 ${hint}`,
+    { parse_mode: 'HTML' }
+  );
 });
+
 bot.action('my_referrals', async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const referrals = await db.select().from(users).where(eq(users.invitedBy, user.id));
@@ -556,43 +686,51 @@ bot.action('my_referrals', async (ctx) => {
   await ctx.answerCbQuery();
 });
 
-bot.hears(['📋 Իմ պատվերները', '📋 Мои заказы', '📋 My orders'], async (ctx) => {
+bot.hears([getTranslation('hy', 'myOrders'), getTranslation('ru', 'myOrders'), getTranslation('en', 'myOrders')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
   const userOrders = await db.select().from(orders).where(eq(orders.userId, user.id)).orderBy(desc(orders.createdAt)).limit(10);
-  if (userOrders.length === 0) return ctx.reply('📭 Դեռ պատվերներ չկան');
-  let text = '📋 *Ձեր վերջին պատվերները*\n\n';
+  if (userOrders.length === 0) return ctx.reply(getTranslation(lang, 'noOrders'));
+  
+  let text = getTranslation(lang, 'ordersTitle') + '\n\n';
   for (let ord of userOrders) {
-    text += `№${ord.id} — ${ord.createdAt.toLocaleDateString()} — ${ord.totalAmount} ֏ — ${ord.status}\n`;
+    let status = '';
+    if (ord.status === 'pending') status = getTranslation(lang, 'orderStatusPending');
+    else if (ord.status === 'confirmed') status = getTranslation(lang, 'orderStatusConfirmed');
+    else if (ord.status === 'rejected') status = getTranslation(lang, 'orderStatusRejected');
+    else if (ord.status === 'completed') status = getTranslation(lang, 'orderStatusCompleted');
+    else status = ord.status;
+    text += `№${ord.id} — ${ord.createdAt.toLocaleDateString()} — ${ord.totalAmount} ֏ — ${status}\n`;
   }
   ctx.reply(text, { parse_mode: 'Markdown' });
 });
 
-bot.hears(['📍 Փոխել քաղաքը', '📍 Сменить город', '📍 Change city'], async (ctx) => {
+bot.hears([getTranslation('hy', 'changeCity'), getTranslation('ru', 'changeCity'), getTranslation('en', 'changeCity')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const t = (key, ...args) => getTranslation(user.language, key, ...args);
   ctx.reply(t('selectCity'), cityMenu(user.language));
 });
 
-bot.hears(['🌆 Երևան', '🌆 Ереван', '🌆 Yerevan'], async (ctx) => {
+bot.hears([getTranslation('hy', 'yerevan'), getTranslation('ru', 'yerevan'), getTranslation('en', 'yerevan')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const t = (key, ...args) => getTranslation(user.language, key, ...args);
   await db.update(users).set({ city: 'yerevan' }).where(eq(users.telegramId, ctx.from.id));
   ctx.reply(t('cityChanged', 'Երևան / Ереван / Yerevan'), { parse_mode: 'HTML', reply_markup: mainMenu(user.language).reply_markup });
 });
 
-bot.hears(['✝️ Էջմիածին', '✝️ Эчмиадзин', '✝️ Echmiadzin'], async (ctx) => {
+bot.hears([getTranslation('hy', 'echmiadzin'), getTranslation('ru', 'echmiadzin'), getTranslation('en', 'echmiadzin')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const t = (key, ...args) => getTranslation(user.language, key, ...args);
   await db.update(users).set({ city: 'echmiadzin' }).where(eq(users.telegramId, ctx.from.id));
   ctx.reply(t('cityChanged', 'Էջմիածին / Эчмиадзин / Echmiadzin'), { parse_mode: 'HTML', reply_markup: mainMenu(user.language).reply_markup });
 });
 
-bot.hears(['◀️ Հետ', '◀️ Назад', '◀️ Back'], async (ctx) => {
+bot.hears([getTranslation('hy', 'back'), getTranslation('ru', 'back'), getTranslation('en', 'back')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   ctx.reply('Գլխավոր մենյու', mainMenu(user.language));
 });
 
-bot.hears(['🌐 Փոխել լեզուն', '🌐 Сменить язык', '🌐 Change language'], async (ctx) => {
+bot.hears([getTranslation('hy', 'changeLanguage'), getTranslation('ru', 'changeLanguage'), getTranslation('en', 'changeLanguage')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const t = (key, ...args) => getTranslation(user.language, key, ...args);
   ctx.reply(t('selectLanguage'), languageMenu(user.language));
@@ -611,9 +749,10 @@ bot.hears(['Հայերեն', 'Русский', 'English'], async (ctx) => {
   ctx.reply(t('languageChanged', ctx.message.text), { reply_markup: mainMenu(newLang).reply_markup });
 });
 
-bot.hears('📊 Իմ վիճակագրություն', async (ctx) => {
+bot.hears([getTranslation('hy', 'myStats'), getTranslation('ru', 'myStats'), getTranslation('en', 'myStats')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   if (!user) return ctx.reply('Խնդրում եմ գրանցվեք /start-ով');
+  const lang = user.language || 'hy';
   
   const totalEarnedImmediate = await db.select().from(bonusTransactions)
     .where(and(eq(bonusTransactions.userId, user.id), eq(bonusTransactions.type, 'earn'), eq(bonusTransactions.bonusType, 'immediate')))
@@ -638,15 +777,14 @@ bot.hears('📊 Իմ վիճակագրություն', async (ctx) => {
   .where(eq(userBonusesByPartner.userId, user.id))
   .groupBy(partners.id, partners.name, partners.nameRu, partners.nameEn);
   
-  const lang = user.language || 'hy';
-  let text = `📊 *ՎԻՃԱԿԱԳՐՈՒԹՅՈՒՆ*\n\n`;
-  text += `✅ Ստացված բոնուսներ (2% անմիջապես): ${totalEarnedImmediate} ֏\n`;
-  text += `⏳ Ստացված բոնուսներ (սառեցված 6 ամիս): ${totalEarnedFrozen} ֏\n`;
-  text += `💸 Ծախսված բոնուսներ: ${totalSpent} ֏\n`;
-  text += `⭐ Ընթացիկ մնացորդ: ${user.bonusBalance} ֏\n\n`;
+  let text = getTranslation(lang, 'statsTitle') + '\n\n';
+  text += getTranslation(lang, 'statsEarnedImmediate', totalEarnedImmediate) + '\n';
+  text += getTranslation(lang, 'statsEarnedFrozen', totalEarnedFrozen) + '\n';
+  text += getTranslation(lang, 'statsSpent', totalSpent) + '\n';
+  text += getTranslation(lang, 'statsBalance', user.bonusBalance) + '\n\n';
   
   if (partnerBonuses.length > 0) {
-    text += `🏢 *ԸՍՏ ԳՈՐԾԸՆԿԵՐՆԵՐԻ*\n\n`;
+    text += getTranslation(lang, 'statsByPartners') + '\n\n';
     for (let pb of partnerBonuses) {
       let name = pb.partnerName;
       if (lang === 'ru' && pb.partnerNameRu) name = pb.partnerNameRu;
@@ -654,7 +792,7 @@ bot.hears('📊 Իմ վիճակագրություն', async (ctx) => {
       text += `• ${name}: ${pb.totalBonus} ֏\n`;
     }
   } else {
-    text += `🏢 Գործընկերներից բոնուսներ դեռ չկան\n`;
+    text += getTranslation(lang, 'statsNoPartners') + '\n';
   }
   
   ctx.reply(text, { parse_mode: 'Markdown' });
@@ -719,6 +857,7 @@ bot.action('remove_admin_by_username', async (ctx) => {
   await ctx.reply('📝 Գրեք հեռացնելու ադմինի Telegram username-ը (առանց @-ի):\nՕրինակ: Aram123');
   await ctx.answerCbQuery();
 });
+
 bot.action(/confirm_order_(\d+)/, async (ctx) => {
   if (!await isAdmin(ctx)) return ctx.answerCbQuery('⛔ Արգելված է');
   await confirmOrder(ctx, parseInt(ctx.match[1]));
@@ -728,6 +867,7 @@ bot.action(/reject_order_(\d+)/, async (ctx) => {
   if (!await isAdmin(ctx)) return ctx.answerCbQuery('⛔ Արգելված է');
   await rejectOrder(ctx, parseInt(ctx.match[1]));
 });
+
 bot.action('add_menu_item', async (ctx) => {
   if (!await isAdmin(ctx)) return;
   ctx.session.adminAction = 'add_menu';
@@ -773,6 +913,13 @@ bot.action('delete_partner', async (ctx) => {
 bot.action('back_to_admin', async (ctx) => {
   if (!await isAdmin(ctx)) return;
   await showAdminPanel(ctx);
+  await ctx.answerCbQuery();
+});
+
+bot.action('back_to_main', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  await ctx.reply(getTranslation(lang, 'backToMain'), mainMenu(lang));
   await ctx.answerCbQuery();
 });
 
