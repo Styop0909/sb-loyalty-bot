@@ -80,7 +80,7 @@ async function registerUser(telegramId, firstName, lastName, username, invitedBy
     lastName,
     username,
     invitedBy: invitedBy || null,
-    language: 'hy',
+    language: null,
     city: 'yerevan',
     bonusBalance: 0,
     frozenBonus: 0,
@@ -134,13 +134,16 @@ bot.start(async (ctx) => {
   if (ctx.startPayload && ctx.startPayload.startsWith('ref_')) {
     refUserId = parseInt(ctx.startPayload.split('_')[1]);
   }
+  
   const user = await registerUser(ctx.from.id, ctx.from.first_name, ctx.from.last_name, ctx.from.username, refUserId);
   
-  const welcomeAllText = getTranslation('hy', 'welcomeAll');
-  await ctx.reply(welcomeAllText, { parse_mode: 'Markdown' });
-  
-  const languageKeyboard = Markup.keyboard([['Հայերեն', 'Русский', 'English']]).resize();
-  await ctx.reply('🌐 Ընտրիր լեզու / Выбери язык / Choose language:', languageKeyboard);
+  if (!user.language || user.language === 'hy') {
+    const languageKeyboard = Markup.keyboard([['Հայերեն', 'Русский', 'English']]).resize();
+    await ctx.reply('🌐 Ընտրիր լեզու / Выбери язык / Choose language:', languageKeyboard);
+  } else {
+    const welcomeText = getTranslation(user.language, 'welcome');
+    await ctx.reply(welcomeText, { parse_mode: 'Markdown', reply_markup: mainMenu(user.language).reply_markup });
+  }
 });
 
 bot.hears(['🏢 Գործընկերներ', '🏢 Партнеры', '🏢 Partners'], async (ctx) => {
@@ -717,10 +720,14 @@ bot.hears(['Հայերեն', 'Русский', 'English'], async (ctx) => {
   
   const langMap = { 'Հայերեն': 'hy', 'Русский': 'ru', 'English': 'en' };
   const newLang = langMap[ctx.message.text];
+  
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   await db.update(users).set({ language: newLang }).where(eq(users.telegramId, ctx.from.id));
+  
   const t = (key, ...args) => getTranslation(newLang, key, ...args);
-  ctx.reply(t('languageChanged', ctx.message.text), { reply_markup: mainMenu(newLang).reply_markup });
+  const welcomeText = t('welcome');
+  
+  await ctx.reply(welcomeText, { parse_mode: 'Markdown', reply_markup: mainMenu(newLang).reply_markup });
 });
 
 bot.hears('📊 Իմ վիճակագրություն', async (ctx) => {
