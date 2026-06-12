@@ -138,7 +138,7 @@ bot.start(async (ctx) => {
   
   if (!user.language) {
     const languageKeyboard = Markup.keyboard([['Հայերեն', 'Русский', 'English']]).resize();
-    await ctx.reply('🌐 Ընտրիր լեզու / Выбери язык / Choose language:', languageKeyboard);
+    await ctx.reply(getTranslation('hy', 'chooseLanguage'), languageKeyboard);
   } else {
     const welcomeText = getTranslation(user.language, 'welcome');
     await ctx.reply(welcomeText, { parse_mode: 'Markdown', reply_markup: mainMenu(user.language).reply_markup });
