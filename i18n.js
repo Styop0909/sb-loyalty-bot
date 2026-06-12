@@ -52,6 +52,7 @@ SB Loyalty-ն սննդի շուրջ կառուցված հավատարմությ�
     cityChanged: (city) => `✅ Քաղաքը փոխվեց: <b>${city}</b>`,
     languageChanged: (lang) => `✅ Լեզուն փոխվեց: ${lang}`,
     noOrders: '📭 Դեռ պատվերներ չկան',
+<<<<<<< HEAD
     ordersTitle: '📋 *Ձեր վերջին պատվերները*',
     orderStatusPending: 'սպասվում է',
     orderStatusConfirmed: 'հաստատված',
@@ -90,6 +91,16 @@ SB Loyalty-ն սննդի շուրջ կառուցված հավատարմությ�
     adminOnly: '⛔ Մուտքը արգելված է',
     invalidNumber: (min, max) => `Սխալ թիվ: Գրեք 0-ից ${max} միջակայքում`,
     cartItem: (name, qty, subtotal) => `${name} x${qty} — ${subtotal} ֏`,
+=======
+    statistics: '📊 Վիճակագրություն',
+    users: '👥 Օգտատերեր',
+    orders: '📦 Պատվերներ',
+    menuManagement: '🍽 Մենյու',
+    partnersManagement: '🏢 Գործընկերներ',
+    backToAdmin: '🔙 Հետ',
+    adminPanel: '🔐 Admin Panel - Ընտրիր գործողությունը:',
+    selectLanguage: '🌐 Ընտրիր լեզու / Выбери язык / Choose language:',
+>>>>>>> fc72af1c4c67fd22b88eae95c37ebce21c8b44b3
   },
   ru: {
     welcome: `🦜 Добро пожаловать в SB Loyalty!
@@ -144,6 +155,7 @@ SB Loyalty — это программа лояльности вокруг ед�
     cityChanged: (city) => `✅ Город изменён: <b>${city}</b>`,
     languageChanged: (lang) => `✅ Язык изменён: ${lang}`,
     noOrders: '📭 Нет заказов',
+<<<<<<< HEAD
     ordersTitle: '📋 *Ваши последние заказы*',
     orderStatusPending: 'ожидает',
     orderStatusConfirmed: 'подтверждён',
@@ -182,6 +194,16 @@ SB Loyalty — это программа лояльности вокруг ед�
     adminOnly: '⛔ Доступ запрещён',
     invalidNumber: (min, max) => `Неверное число: Напишите от 0 до ${max}`,
     cartItem: (name, qty, subtotal) => `${name} x${qty} — ${subtotal} ֏`,
+=======
+    statistics: '📊 Статистика',
+    users: '👥 Пользователи',
+    orders: '📦 Заказы',
+    menuManagement: '🍽 Меню',
+    partnersManagement: '🏢 Партнеры',
+    backToAdmin: '🔙 Назад',
+    adminPanel: '🔐 Admin Panel - Выберите действие:',
+    selectLanguage: '🌐 Выберите язык / Choose language / Ընտրիր լեզու:',
+>>>>>>> fc72af1c4c67fd22b88eae95c37ebce21c8b44b3
   },
   en: {
     welcome: `🦜 Welcome to SB Loyalty!
@@ -236,6 +258,7 @@ The more active friends — the more bonuses! 🚀`,
     cityChanged: (city) => `✅ City changed: <b>${city}</b>`,
     languageChanged: (lang) => `✅ Language changed: ${lang}`,
     noOrders: '📭 No orders yet',
+<<<<<<< HEAD
     ordersTitle: '📋 *Your recent orders*',
     orderStatusPending: 'pending',
     orderStatusConfirmed: 'confirmed',
@@ -274,6 +297,16 @@ The more active friends — the more bonuses! 🚀`,
     adminOnly: '⛔ Access denied',
     invalidNumber: (min, max) => `Invalid number: Please enter 0 to ${max}`,
     cartItem: (name, qty, subtotal) => `${name} x${qty} — ${subtotal} AMD`,
+=======
+    statistics: '📊 Statistics',
+    users: '👥 Users',
+    orders: '📦 Orders',
+    menuManagement: '🍽 Menu',
+    partnersManagement: '🏢 Partners',
+    backToAdmin: '🔙 Back',
+    adminPanel: '🔐 Admin Panel - Choose action:',
+    selectLanguage: '🌐 Choose language / Выбери язык / Ընտրիր լեզու:',
+>>>>>>> fc72af1c4c67fd22b88eae95c37ebce21c8b44b3
   },
 };
 
