@@ -137,7 +137,7 @@ bot.start(async (ctx) => {
   
   const user = await registerUser(ctx.from.id, ctx.from.first_name, ctx.from.last_name, ctx.from.username, refUserId);
   
-  if (!user.language || user.language === 'hy') {
+  if (!user.language) {
     const languageKeyboard = Markup.keyboard([['Հայերեն', 'Русский', 'English']]).resize();
     await ctx.reply('🌐 Ընտրիր լեզու / Выбери язык / Choose language:', languageKeyboard);
   } else {
@@ -724,8 +724,7 @@ bot.hears(['Հայերեն', 'Русский', 'English'], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   await db.update(users).set({ language: newLang }).where(eq(users.telegramId, ctx.from.id));
   
-  const t = (key, ...args) => getTranslation(newLang, key, ...args);
-  const welcomeText = t('welcome');
+  const welcomeText = getTranslation(newLang, 'welcome');
   
   await ctx.reply(welcomeText, { parse_mode: 'Markdown', reply_markup: mainMenu(newLang).reply_markup });
 });
