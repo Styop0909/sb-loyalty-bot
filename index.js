@@ -137,13 +137,8 @@ bot.start(async (ctx) => {
   
   const user = await registerUser(ctx.from.id, ctx.from.first_name, ctx.from.last_name, ctx.from.username, refUserId);
   
-  if (!user.language) {
-    const languageKeyboard = Markup.keyboard([['Հայերեն', 'Русский', 'English']]).resize();
-    await ctx.reply('🌐 Ընտրիր լեզու / Выбери язык / Choose language:', languageKeyboard);
-  } else {
-    const welcomeText = getTranslation(user.language, 'welcome');
-    await ctx.reply(welcomeText, { parse_mode: 'Markdown', reply_markup: mainMenu(user.language).reply_markup });
-  }
+  const languageKeyboard = Markup.keyboard([['Հայերեն', 'Рուսский', 'English']]).resize();
+  await ctx.reply('🌐 Ընտրիր լեզու / Выбери язык / Choose language:', languageKeyboard);
 });
 
 bot.hears(['🏢 Գործընկերներ', '🏢 Партнеры', '🏢 Partners'], async (ctx) => {
