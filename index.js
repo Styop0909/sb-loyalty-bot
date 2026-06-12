@@ -45,8 +45,8 @@ function mainMenu(lang) {
     [t('menu'), t('bonus')],
     [t('referral'), t('myOrders')],
     [t('changeCity'), t('changeLanguage')],
-    ['🏢 Գործընկերներ', '🛒 Զամբյուղ'],
-    ['📊 Իմ վիճակագրություն']
+    [t('partners'), t('cart')],
+    [t('myStats')]
   ]).resize();
 }
 
@@ -69,7 +69,6 @@ function validatePhone(phone) {
   const regex = /^\+374\d{8}$/;
   return regex.test(phone);
 }
-
 async function registerUser(telegramId, firstName, lastName, username, invitedBy = null) {
   const existing = await db.select().from(users).where(eq(users.telegramId, telegramId));
   if (existing.length > 0) return existing[0];
@@ -137,8 +136,13 @@ bot.start(async (ctx) => {
   
   const user = await registerUser(ctx.from.id, ctx.from.first_name, ctx.from.last_name, ctx.from.username, refUserId);
   
-  const languageKeyboard = Markup.keyboard([['Հայերեն', 'Рուսский', 'English']]).resize();
-  await ctx.reply('🌐 Ընտրիր լեզու / Выбери язык / Choose language:', languageKeyboard);
+  if (!user.language) {
+    const languageKeyboard = Markup.keyboard([['Հայերեն', 'Русский', 'English']]).resize();
+    await ctx.reply('🌐 Ընտրիր լեզու / Выбери язык / Choose language:', languageKeyboard);
+  } else {
+    const welcomeText = getTranslation(user.language, 'welcome');
+    await ctx.reply(welcomeText, { parse_mode: 'Markdown', reply_markup: mainMenu(user.language).reply_markup });
+  }
 });
 
 bot.hears(['🏢 Գործընկերներ', '🏢 Партнеры', '🏢 Partners'], async (ctx) => {
