@@ -50,14 +50,6 @@ SB Loyalty-ն սննդի շուրջ կառուցված հավատարմությ�
     cityChanged: (city) => `✅ Քաղաքը փոխվեց: <b>${city}</b>`,
     languageChanged: (lang) => `✅ Լեզուն փոխվեց: ${lang}`,
     noOrders: '📭 Դեռ պատվերներ չկան',
-    statistics: '📊 Վիճակագրություն',
-    users: '👥 Օգտատերեր',
-    orders: '📦 Պատվերներ',
-    menuManagement: '🍽 Մենյու',
-    partnersManagement: '🏢 Գործընկերներ',
-    backToAdmin: '🔙 Հետ',
-    adminPanel: '🔐 Admin Panel - Ընտրիր գործողությունը:',
-    selectLanguage: '🌐 Ընտրիր լեզու / Выбери язык / Choose language:',
   },
   ru: {
     welcome: `🦜 Добро пожаловать в SB Loyalty!
@@ -110,14 +102,6 @@ SB Loyalty — это программа лояльности вокруг ед�
     cityChanged: (city) => `✅ Город изменён: <b>${city}</b>`,
     languageChanged: (lang) => `✅ Язык изменён: ${lang}`,
     noOrders: '📭 Нет заказов',
-    statistics: '📊 Статистика',
-    users: '👥 Пользователи',
-    orders: '📦 Заказы',
-    menuManagement: '🍽 Меню',
-    partnersManagement: '🏢 Партнеры',
-    backToAdmin: '🔙 Назад',
-    adminPanel: '🔐 Admin Panel - Выберите действие:',
-    selectLanguage: '🌐 Выберите язык / Choose language / Ընտրիր լեզու:',
   },
   en: {
     welcome: `🦜 Welcome to SB Loyalty!
@@ -170,18 +154,67 @@ The more active friends — the more bonuses! 🚀`,
     cityChanged: (city) => `✅ City changed: <b>${city}</b>`,
     languageChanged: (lang) => `✅ Language changed: ${lang}`,
     noOrders: '📭 No orders yet',
-    statistics: '📊 Statistics',
-    users: '👥 Users',
-    orders: '📦 Orders',
-    menuManagement: '🍽 Menu',
-    partnersManagement: '🏢 Partners',
-    backToAdmin: '🔙 Back',
-    adminPanel: '🔐 Admin Panel - Choose action:',
-    selectLanguage: '🌐 Choose language / Выбери язык / Ընտրիր լեզու:',
   },
+  welcomeAll: `🦜 **Բարի գալուստ SB Loyalty! / Добро пожаловать! / Welcome!**
+
+--- Հայերեն ---
+SB Loyalty-ն սննդի շուրջ կառուցված հավատարմության ծրագիր է:
+Պատվիրիր մեզնից և գործընկերներից, կուտակիր բոնուսներ,
+հրավիրիր ընկերներին և ծախսիր բոնուսները հաջորդ պատվերների վրա:
+
+Ամեն ինչ թափանցիկ է: Ամեն ինչ ազնիվ է:
+
+⭐ Ինչպես են աշխատում քո բոնուսները:
+🟢 2% յուրաքանչյուր պատվերից — հասանելի են անմիջապես
+⚫ 3% յուրաքանչյուր պատվերից — բացվում են 6 ամիս ակտիվ գնումներից հետո
+💳 Բոնուսներով կարող ես վճարել պատվերի գումարի մինչև 30%-ը
+🚫 Բոնուսները չի կարելի կանխիկացնել — միայն ծախսել համակարգի ներսում
+
+👥 Հրավիրիր ընկերներին — ավելի շատ վաստակիր:
+🎁 Սկզբնական բոնուս: երկուսդ էլ 10,000 ֏-ից ավելի պատվեր → +1,000 բոնուս
+📊 1% / 0.5% / 0.25% 3 մակարդակ
+
+--- Русский ---
+SB Loyalty — это программа лояльности вокруг еды.
+Заказывай у нас и партнёров, копи бонусы,
+приглашай друзей и трать бонусы на следующие заказы.
+
+Всё прозрачно. Всё честно.
+
+⭐ Как работают твои бонусы:
+🟢 2% от каждого заказа — доступны сразу
+⚫ 3% от каждого заказа — открываются через 6 месяцев
+💳 Бонусами можно оплатить до 30% от суммы заказа
+🚫 Бонусы нельзя вывести деньгами
+
+👥 Приглашай друзей — зарабатывай больше!
+🎁 Стартовый бонус: оба заказа от 10,000 ֏ → +1,000 бонусов
+📊 1% / 0.5% / 0.25%
+
+--- English ---
+SB Loyalty is a loyalty program built around food.
+Order from us and partners, accumulate bonuses,
+invite friends, and spend bonuses on future orders.
+
+Everything is transparent. Everything is fair.
+
+⭐ How your bonuses work:
+🟢 2% from each order — available immediately
+⚫ 3% from each order — unlocked after 6 months
+💳 You can pay up to 30% of the order amount with bonuses
+🚫 Bonuses cannot be cashed out
+
+👥 Invite friends — earn more!
+🎁 Starter bonus: both order over 10,000 AMD → +1,000 bonuses
+📊 1% / 0.5% / 0.25%
+
+👇 **Ընտրիր լեզուն / Выбери язык / Choose language** 👇`,
 };
 
 function getTranslation(lang, key, ...args) {
+  if (key === 'welcomeAll') {
+    return translations.welcomeAll;
+  }
   const t = translations[lang] || translations.hy;
   if (typeof t[key] === 'function') {
     return t[key](...args);
