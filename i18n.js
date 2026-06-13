@@ -1,8 +1,8 @@
 const translations = {
   hy: {
-    welcome: `🦜 Բարի գալուստ SB Loyalty!
+    welcome: `🦜 Բարի գալուստ TuTak!
 
-SB Loyalty-ն սննդի շուրջ կառուցված հավատարմության ծրագիր է:
+TuTak-ն սննդի շուրջ կառուցված հավատարմության ծրագիր է:
 Պատվիրիր մեզնից և գործընկերներից, կուտակիր բոնուսներ,
 հրավիրիր ընկերներին և ծախսիր բոնուսները հաջորդ պատվերների վրա:
 
@@ -100,9 +100,9 @@ SB Loyalty-ն սննդի շուրջ կառուցված հավատարմությ�
     selectLanguage: '🌐 Ընտրիր լեզու / Выбери язык / Choose language:',
   },
   ru: {
-    welcome: `🦜 Добро пожаловать в SB Loyalty!
+    welcome: `🦜 Добро пожаловать в TuTak!
 
-SB Loyalty — это программа лояльности вокруг еды.
+TuTak — это программа лояльности вокруг еды.
 Заказывай у нас и партнёров, копи бонусы,
 приглашай друзей и трать бонусы на следующие заказы.
 
@@ -200,9 +200,9 @@ SB Loyalty — это программа лояльности вокруг ед�
     selectLanguage: '🌐 Выберите язык / Choose language / Ընտրիր լեզու:',
   },
   en: {
-    welcome: `🦜 Welcome to SB Loyalty!
+    welcome: `🦜 Welcome to TuTak!
 
-SB Loyalty is a loyalty program built around food.
+TuTak is a loyalty program built around food.
 Order from us and partners, accumulate bonuses,
 invite friends, and spend bonuses on future orders.
 
