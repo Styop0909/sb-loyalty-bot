@@ -274,7 +274,15 @@ bot.action(/add_(\d+)/, async (ctx) => {
         quantity: 1
       });
     }
-    await ctx.answerCbQuery(getTranslation('hy', 'itemAdded', item.name)).catch(() => {});
+    
+    const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+    const lang = user?.language || 'hy';
+    
+    let itemName = item.name;
+    if (lang === 'ru' && item.nameRu) itemName = item.nameRu;
+    if (lang === 'en' && item.nameEn) itemName = item.nameEn;
+    
+    await ctx.answerCbQuery(getTranslation(lang, 'itemAdded', itemName)).catch(() => {});
   } catch (err) {
     console.error('Add to cart error:', err);
     await ctx.answerCbQuery('Սխալ, փորձեք կրկին').catch(() => {});
