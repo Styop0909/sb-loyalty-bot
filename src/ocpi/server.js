@@ -13,6 +13,8 @@ const OUR_PARTY = {
 };
 
 let tokenC = null;
+let receivedRequests = {};
+
 router.get('/', (req, res) => {
   res.json({
     status_code: 1000,
@@ -21,6 +23,7 @@ router.get('/', (req, res) => {
     versions: `https://${req.get('host')}/ocpi/versions`
   });
 });
+
 router.get('/versions', (req, res) => {
   res.json({
     status_code: 1000,
@@ -52,62 +55,127 @@ router.get('/2.2.1/details', (req, res) => {
 });
 
 router.post('/2.2.1/credentials', async (req, res) => {
-  const { token, url, roles } = req.body;
+  try {
+    console.log('🔥 POST /credentials received:', JSON.stringify(req.body, null, 2));
+    
+    const { token, url, roles } = req.body;
 
-  const expectedToken = process.env.OCPI_TOKEN_A;
-  if (token !== expectedToken) {
-    return res.status(401).json({
-      status_code: 2001,
-      status_message: 'Invalid token',
+    const expectedToken = process.env.OCPI_TOKEN_A;
+    console.log('🔑 Expected token:', expectedToken ? 'set' : 'MISSING');
+    
+    if (!expectedToken) {
+      console.error('❌ OCPI_TOKEN_A environment variable is not set');
+      return res.status(500).json({
+        status_code: 5000,
+        status_message: 'Server configuration error: OCPI_TOKEN_A not set',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (!token) {
+      console.error('❌ No token provided in request');
+      return res.status(400).json({
+        status_code: 2001,
+        status_message: 'Missing token in request',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (token !== expectedToken) {
+      console.error('❌ Invalid token provided');
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    tokenC = crypto.randomBytes(48).toString('base64');
+    console.log('✅ Token C generated successfully');
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      timestamp: new Date().toISOString(),
+      data: {
+        token: tokenC,
+        url: `https://${req.get('host')}/ocpi/versions`,
+        roles: [{
+          role: 'EMSP',
+          party_id: OUR_PARTY.party_id,
+          country_code: OUR_PARTY.country_code,
+          business_details: OUR_PARTY.business_details
+        }]
+      }
+    });
+  } catch (error) {
+    console.error('❌ POST /credentials error:', error);
+    res.status(500).json({
+      status_code: 5000,
+      status_message: 'Internal server error: ' + error.message,
       timestamp: new Date().toISOString()
     });
   }
-
-  tokenC = crypto.randomBytes(48).toString('base64');
-
-  res.json({
-    status_code: 1000,
-    status_message: 'Success',
-    timestamp: new Date().toISOString(),
-    data: {
-      token: tokenC,
-      url: `https://${req.get('host')}/ocpi/versions`,
-      roles: [{
-        role: 'EMSP',
-        party_id: OUR_PARTY.party_id,
-        country_code: OUR_PARTY.country_code,
-        business_details: OUR_PARTY.business_details
-      }]
-    }
-  });
 });
 
 router.get('/2.2.1/locations', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || authHeader !== `Token ${tokenC}`) {
-    return res.status(401).json({ status_code: 2001, status_message: 'Unauthorized' });
-  }
+  try {
+    const authHeader = req.headers.authorization;
+    console.log('🔍 GET /locations auth:', authHeader ? 'present' : 'missing');
+    
+    if (!authHeader || authHeader !== `Token ${tokenC}`) {
+      console.warn('⚠️ Unauthorized GET /locations attempt');
+      return res.status(401).json({ 
+        status_code: 2001, 
+        status_message: 'Unauthorized',
+        timestamp: new Date().toISOString()
+      });
+    }
 
-  res.json({
-    status_code: 1000,
-    status_message: 'Success',
-    timestamp: new Date().toISOString(),
-    data: []
-  });
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      timestamp: new Date().toISOString(),
+      data: []
+    });
+  } catch (error) {
+    console.error('❌ GET /locations error:', error);
+    res.status(500).json({
+      status_code: 5000,
+      status_message: 'Internal server error',
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 router.get('/2.2.1/tariffs', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || authHeader !== `Token ${tokenC}`) {
-    return res.status(401).json({ status_code: 2001, status_message: 'Unauthorized' });
-  }
+  try {
+    const authHeader = req.headers.authorization;
+    console.log('🔍 GET /tariffs auth:', authHeader ? 'present' : 'missing');
+    
+    if (!authHeader || authHeader !== `Token ${tokenC}`) {
+      console.warn('⚠️ Unauthorized GET /tariffs attempt');
+      return res.status(401).json({ 
+        status_code: 2001, 
+        status_message: 'Unauthorized',
+        timestamp: new Date().toISOString()
+      });
+    }
 
-  res.json({
-    status_code: 1000,
-    status_message: 'Success',
-    timestamp: new Date().toISOString(),
-    data: []
-  });
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      timestamp: new Date().toISOString(),
+      data: []
+    });
+  } catch (error) {
+    console.error('❌ GET /tariffs error:', error);
+    res.status(500).json({
+      status_code: 5000,
+      status_message: 'Internal server error',
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 module.exports = router;
