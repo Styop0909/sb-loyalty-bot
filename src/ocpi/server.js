@@ -13,7 +13,14 @@ const OUR_PARTY = {
 };
 
 let tokenC = null;
-
+router.get('/', (req, res) => {
+  res.json({
+    status_code: 1000,
+    status_message: 'OCPI Server is running',
+    timestamp: new Date().toISOString(),
+    versions: `https://${req.get('host')}/ocpi/versions`
+  });
+});
 router.get('/versions', (req, res) => {
   res.json({
     status_code: 1000,
