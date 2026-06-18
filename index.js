@@ -29,14 +29,16 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 10000;
 
-('/', (req, res) => {
-  res.send('SB Loyalty Bot is running!');
+app.get('/', (req, res) => {
+  res.send('TuTak Bot is running!');
 });
+
+app.use('/ocpi', ocpiRouter);
 
 app.listen(port, () => {
   console.log(`✅ HTTP server running on port ${port}`);
 });
-app.use('/ocpi', ocpiRouter);
+
 const bot = new Telegraf(process.env.BOT_TOKEN);
 bot.use(new LocalSession({ database: 'session_db.json' }).middleware());
 
@@ -927,6 +929,9 @@ bot.action('back_to_main', async (ctx) => {
   await ctx.reply(getTranslation(lang, 'backToMain'), mainMenu(lang));
   await ctx.answerCbQuery();
 });
+bot.telegram.deleteWebhook({ drop_pending_updates: true })
+  .then(() => console.log('✅ Webhook deleted'))
+  .catch((err) => console.error('Webhook delete error:', err));
 
 bot.launch({ polling: { timeout: 30 } });
 console.log('✅ SB Loyalty Bot աշխատում է...');
