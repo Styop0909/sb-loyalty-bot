@@ -6,6 +6,7 @@ const { users, orders, menuItems, bonusTransactions, partners, userBonusesByPart
 const { eq, desc, and } = require('drizzle-orm');
 const { getTranslation } = require('./i18n');
 const { sql } = require('drizzle-orm');
+const ocpiRouter = require('./src/ocpi/server');
 const { 
   isAdmin, 
   showAdminPanel, 
@@ -28,14 +29,14 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 10000;
 
-app.get('/', (req, res) => {
+('/', (req, res) => {
   res.send('SB Loyalty Bot is running!');
 });
 
 app.listen(port, () => {
   console.log(`✅ HTTP server running on port ${port}`);
 });
-
+app.use('/ocpi', ocpiRouter);
 const bot = new Telegraf(process.env.BOT_TOKEN);
 bot.use(new LocalSession({ database: 'session_db.json' }).middleware());
 
