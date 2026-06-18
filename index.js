@@ -33,6 +33,7 @@ app.get('/', (req, res) => {
   res.send('TuTak Bot is running!');
 });
 
+app.use(express.json());
 app.use('/ocpi', ocpiRouter);
 
 app.listen(port, () => {
