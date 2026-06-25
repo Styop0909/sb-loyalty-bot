@@ -934,11 +934,15 @@ bot.action('back_to_main', async (ctx) => {
 bot.telegram.deleteWebhook({ drop_pending_updates: true })
   .then(() => {
     console.log('✅ Webhook deleted');
-    bot.launch({ polling: { timeout: 30 } });
+    setTimeout(() => {
+      bot.launch({ polling: { timeout: 30 } });
+    }, 2000);
   })
   .catch((err) => {
     console.error('Webhook delete error:', err);
-    bot.launch({ polling: { timeout: 30 } });
+    setTimeout(() => {
+      bot.launch({ polling: { timeout: 30 } });
+    }, 2000);
   });
 
 console.log('✅ TuTak Bot աշխատում է...');
