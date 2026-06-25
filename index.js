@@ -930,9 +930,15 @@ bot.action('back_to_main', async (ctx) => {
   await ctx.reply(getTranslation(lang, 'backToMain'), mainMenu(lang));
   await ctx.answerCbQuery();
 });
-bot.telegram.deleteWebhook({ drop_pending_updates: true })
-  .then(() => console.log('✅ Webhook deleted'))
-  .catch((err) => console.error('Webhook delete error:', err));
 
-bot.launch({ polling: { timeout: 30 } });
-console.log('✅ SB Loyalty Bot աշխատում է...');
+bot.telegram.deleteWebhook({ drop_pending_updates: true })
+  .then(() => {
+    console.log('✅ Webhook deleted');
+    bot.launch({ polling: { timeout: 30 } });
+  })
+  .catch((err) => {
+    console.error('Webhook delete error:', err);
+    bot.launch({ polling: { timeout: 30 } });
+  });
+
+console.log('✅ TuTak Bot աշխատում է...');
