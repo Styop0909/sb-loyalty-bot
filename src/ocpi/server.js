@@ -60,7 +60,7 @@ router.post('/2.2.1/credentials', async (req, res) => {
     
     const { token, url, roles } = req.body;
 
-    const expectedToken = process.env.OCPI_TOKEN_A;
+    const expectedToken = process.env.OCPI_TOKEN_A_NEW;
     console.log('🔑 Expected token:', expectedToken ? 'set' : 'MISSING');
     
     if (!expectedToken) {
