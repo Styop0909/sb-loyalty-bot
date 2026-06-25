@@ -25,6 +25,9 @@ router.get('/', (req, res) => {
 });
 
 router.get('/versions', (req, res) => {
+    const host = req.get('host');
+  console.log('🔍 Host from request:', host);
+  console.log('🔍 Full URL:', `https://${host}/ocpi/2.2.1/details`);
   res.json({
     status_code: 1000,
     status_message: 'Success',
