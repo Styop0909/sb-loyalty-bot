@@ -32,7 +32,14 @@ const port = process.env.PORT || 8080;
 app.get('/', (req, res) => {
   res.send('TuTak Bot is running!');
 });
-
+app.get('/ocpi/versions', (req, res) => {
+  res.json({
+    status_code: 1000,
+    data: [
+      { version: '2.2.1', url: 'https://sb-loyalty-bot.up.railway.app/ocpi/2.2.1/details' }
+    ]
+  });
+});
 app.use(express.json());
 app.use('/ocpi', ocpiRouter);
 
