@@ -6,7 +6,7 @@ const { users, orders, menuItems, bonusTransactions, partners, userBonusesByPart
 const { eq, desc, and } = require('drizzle-orm');
 const { getTranslation } = require('./i18n');
 const { sql } = require('drizzle-orm');
-const ocpiRouter = require('./src/ocpi/server');
+const ocpiRouter = require('./src/ocpi/server.js');
 const { 
   isAdmin, 
   showAdminPanel, 
