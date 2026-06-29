@@ -13,21 +13,20 @@ const OUR_PARTY = {
 };
 
 let tokenC = null;
-let receivedRequests = {};
 
 router.get('/', (req, res) => {
   res.json({
     status_code: 1000,
     status_message: 'OCPI Server is running',
     timestamp: new Date().toISOString(),
-    versions: `https://${req.get('host')}/ocpi/versions`
+    versions: `https://${req.get('host')}/versions`
   });
 });
 
 router.get('/versions', (req, res) => {
-    const host = req.get('host');
+  const host = req.get('host');
   console.log('🔍 Host from request:', host);
-  console.log('🔍 Full URL:', `https://${host}/ocpi/2.2.1/details`);
+  console.log('🔍 Full URL:', `https://${host}/details`);
   res.json({
     status_code: 1000,
     status_message: 'Success',
@@ -35,13 +34,13 @@ router.get('/versions', (req, res) => {
     data: [
       {
         version: '2.2.1',
-        url: `https://${req.get('host')}/ocpi/2.2.1/details`
+        url: `https://${host}/details`
       }
     ]
   });
 });
 
-router.get('/2.2.1/details', (req, res) => {
+router.get('/details', (req, res) => {
   res.json({
     status_code: 1000,
     status_message: 'Success',
@@ -49,15 +48,15 @@ router.get('/2.2.1/details', (req, res) => {
     data: {
       version: '2.2.1',
       endpoints: [
-        { identifier: 'credentials', role: 'RECEIVER', url: `https://${req.get('host')}/ocpi/2.2.1/credentials` },
-        { identifier: 'locations', role: 'SENDER', url: `https://${req.get('host')}/ocpi/2.2.1/locations` },
-        { identifier: 'tariffs', role: 'SENDER', url: `https://${req.get('host')}/ocpi/2.2.1/tariffs` }
+        { identifier: 'credentials', role: 'RECEIVER', url: `https://${req.get('host')}/credentials` },
+        { identifier: 'locations', role: 'SENDER', url: `https://${req.get('host')}/locations` },
+        { identifier: 'tariffs', role: 'SENDER', url: `https://${req.get('host')}/tariffs` }
       ]
     }
   });
 });
 
-router.post('/2.2.1/credentials', async (req, res) => {
+router.post('/credentials', async (req, res) => {
   try {
     console.log('🔥 POST /credentials received:', JSON.stringify(req.body, null, 2));
     
@@ -102,7 +101,7 @@ router.post('/2.2.1/credentials', async (req, res) => {
       timestamp: new Date().toISOString(),
       data: {
         token: tokenC,
-        url: `https://${req.get('host')}/ocpi/versions`,
+        url: `https://${req.get('host')}/versions`,
         roles: [{
           role: 'EMSP',
           party_id: OUR_PARTY.party_id,
@@ -121,7 +120,7 @@ router.post('/2.2.1/credentials', async (req, res) => {
   }
 });
 
-router.get('/2.2.1/locations', async (req, res) => {
+router.get('/locations', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     console.log('🔍 GET /locations auth:', authHeader ? 'present' : 'missing');
@@ -151,7 +150,7 @@ router.get('/2.2.1/locations', async (req, res) => {
   }
 });
 
-router.get('/2.2.1/tariffs', async (req, res) => {
+router.get('/tariffs', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     console.log('🔍 GET /tariffs auth:', authHeader ? 'present' : 'missing');
