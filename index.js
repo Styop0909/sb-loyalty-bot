@@ -940,7 +940,7 @@ bot.action('back_to_main', async (ctx) => {
 
 bot.telegram.deleteWebhook({ drop_pending_updates: true })
   .then(() => {
-    console.log('✅ Webhook deleted');
+    console.log('✅ Webhook deleted New');
     setTimeout(() => {
       bot.launch({ polling: { timeout: 30 } });
     }, 2000);
