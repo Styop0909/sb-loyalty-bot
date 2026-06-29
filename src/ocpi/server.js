@@ -181,4 +181,5 @@ router.get('/2.2.1/tariffs', async (req, res) => {
   }
 });
 
+console.log('🔥 OCPI Router loaded!');
 module.exports = router;
