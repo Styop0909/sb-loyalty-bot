@@ -694,7 +694,7 @@ bot.hears([getTranslation('hy', 'referral'), getTranslation('ru', 'referral'), g
   const referrals = await db.select().from(users).where(eq(users.invitedBy, user.id));
   let referralsText = '';
   if (referrals.length > 0) {
-    referralsText = `\n\n👥 *${getTranslation(lang, 'referralFriends', referrals.length)}*\n`;
+    referralsText = `\n${getTranslation(lang, 'referralFriends', referrals.length)}*\n`;
     for (let ref of referrals) {
       referralsText += `• ${ref.firstName || ref.username || ref.telegramId}\n`;
     }
@@ -704,7 +704,7 @@ bot.hears([getTranslation('hy', 'referral'), getTranslation('ru', 'referral'), g
   await ctx.replyWithPhoto(
     { source: Buffer.from(qrImage.split(',')[1], 'base64') },
     {
-      caption: `${getTranslation(lang, 'referralText', refLink)}\n${referralsText}\n ${hint}`,
+      caption: `${getTranslation(lang, 'referralText', refLink)}\n${referralsText}\n${hint}`,
       parse_mode: 'HTML'
     }
   );
