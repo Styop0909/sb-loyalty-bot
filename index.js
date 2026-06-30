@@ -36,7 +36,7 @@ app.get('/ocpi/versions', (req, res) => {
   res.json({
     status_code: 1000,
     data: [
-      { version: '2.2.1', url: 'https://sb-loyalty-bot-production.up.railway.app/details' }
+      { version: '2.2.1', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/details' }
     ]
   });
 });
