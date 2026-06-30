@@ -704,7 +704,7 @@ bot.hears([getTranslation('hy', 'referral'), getTranslation('ru', 'referral'), g
   await ctx.replyWithPhoto(
     { source: Buffer.from(qrImage.split(',')[1], 'base64') },
     {
-      caption: `${getTranslation(lang, 'referralText', refLink)}\n${referralsText}\n\n💡 ${hint}`,
+      caption: `${getTranslation(lang, 'referralText', refLink)}\n${referralsText}\n ${hint}`,
       parse_mode: 'HTML'
     }
   );
@@ -719,7 +719,7 @@ bot.action('my_referrals', async (ctx) => {
     return;
   }
   
-  let text = '👥 *Ձեր հրավիրածները*\n\n';
+  let text = 'Ձեր հրավիրածները*\n\n';
   for (let ref of referrals) {
     text += `• ${ref.firstName || ref.username || ref.telegramId}\n`;
   }
