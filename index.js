@@ -7,7 +7,6 @@ const { eq, desc, and } = require('drizzle-orm');
 const { getTranslation } = require('./i18n');
 const { sql } = require('drizzle-orm');
 
-// OCPI Router - միացված է ՄԻԱՅՆ այստեղ
 const ocpiRouter = require('./src/ocpi/server.js');
 
 const { 
@@ -32,42 +31,37 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 8080;
 
-// ========== OCPI Routes ==========
 app.get('/ocpi/versions', (req, res) => {
   res.json({
     status_code: 1000,
     data: [
-      { version: '2.2.1', url: 'https://sb-loyalty-bot.up.railway.app/ocpi/2.2.1/details' }
+      { version: '2.2.1', url: 'https://sb-loyalty-bot-production.up.railway.app/details' }
     ]
   });
 });
 
-app.get('/ocpi/2.2.1/details', (req, res) => {
+app.get('/ocpi/details', (req, res) => {
   res.json({
     status_code: 1000,
     data: {
       version: '2.2.1',
       endpoints: [
-        { identifier: 'credentials', role: 'RECEIVER', url: 'https://sb-loyalty-bot.up.railway.app/ocpi/2.2.1/credentials' },
-        { identifier: 'locations', role: 'SENDER', url: 'https://sb-loyalty-bot.up.railway.app/ocpi/2.2.1/locations' },
-        { identifier: 'tariffs', role: 'SENDER', url: 'https://sb-loyalty-bot.up.railway.app/ocpi/2.2.1/tariffs' }
+        { identifier: 'credentials', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/credentials' },
+        { identifier: 'locations', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/locations' },
+        { identifier: 'tariffs', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/tariffs' }
       ]
     }
   });
 });
 
-app.post('/ocpi/2.2.1/credentials', (req, res) => {
-  // Այստեղ ավելացրու credentials handler-ը (մենք այն կգրենք ավելի ուշ)
+app.post('/ocpi/credentials', (req, res) => {
   res.status(501).json({ status_code: 501, status_message: 'Not implemented yet' });
 });
 
 app.use(express.json());
 
-// ========== OCPI Router ==========
-// Միացնում ենք OCPI Router-ը, որպեսզի աշխատեն մնացած բոլոր OCPI endpoints-ները
 app.use('/ocpi', ocpiRouter);
 
-// ========== Main Route ==========
 app.get('/', (req, res) => {
   res.send('TuTak Bot is running!');
 });
@@ -76,7 +70,6 @@ app.listen(port, () => {
   console.log(`✅ HTTP server running on port ${port}`);
 });
 
-// ========== Telegram Bot ==========
 const bot = new Telegraf(process.env.BOT_TOKEN);
 bot.use(new LocalSession({ database: 'session_db.json' }).middleware());
 
