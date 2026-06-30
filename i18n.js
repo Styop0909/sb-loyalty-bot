@@ -2,9 +2,9 @@ const translations = {
   hy: {
     welcome: `🦜 Բարի գալուստ TuTak!
 
-TuTak-ն սննդի շուրջ կառուցված հավատարմության ծրագիր է:
-Պատվիրիր մեզնից և գործընկերներից, կուտակիր բոնուսներ,
-հրավիրիր ընկերներին և ծախսիր բոնուսները հաջորդ պատվերների վրա:
+TuTak-ը միասնական հավատարմության ծրագիր է, որը միավորում է սննդի պատվերները և էլեկտրոմոբիլների լիցքավորման կայանները:
+Պատվիրիր ուտելիք մեր խոհանոցներից, օգտվիր լիցքավորման կայաններից (OCPI), կուտակիր բոնուսներ,
+հրավիրիր ընկերներին և ծախսիր բոնուսները հաջորդ պատվերների կամ լիցքավորման վրա:
 
 Ամեն ինչ թափանցիկ է: Ամեն ինչ ազնիվ է:
 
@@ -46,7 +46,7 @@ TuTak-ն սննդի շուրջ կառուցված հավատարմության �
     changeLanguage: '🌐 Փոխել լեզուն',
     emptyMenu: '📭 Մենյուն դատարկ է։ Խնդրում եմ սպասեք թարմացմանը։',
     bonusText: (available, frozen) => `<b>⭐ Ձեր բոնուսները</b>\n\n🟢 Հասանելի: ${available} ֏\n⚫ Սառեցված: ${frozen} ֏\n\n🔹 2% անմիջապես, 3% բացվում է 6 ամսից`,
-    referralText: (link) => `<b>👥 Ռեֆերալային ծրագիր</b>\n\n🔗 Ձեր հղումը:\n<code>${link}</code>\n\n📊 Բոնուսներ:\n• 1% - 1-ին մակարդակ\n• 0.5% - 2-րդ մակարդակ\n• 0.25% - 3-րդ մակարդակ`,
+    referralText: (link) => `<b>👥 Ռեֆերալային ծրագիր</b>\n\n🔗 Ձեր հղումը:\n<code>${link}</code>\n\n📊 Բոնուսներ:\n• 1% - 1-ին մակարդակ\n• 0.5% - 2-րդ մակարդակ\n• 0.25% - 3-րդ մակարդակ\n\n📱 Ձեր անհատական QR կոդը (սկանավորելով հրավիրում եք ընկերոջը):`,
     referralFriends: (count) => `👥 Ձեր հրավիրածները: ${count}`,
     referralCopyHint: `💡 Հղումը պատճենելու համար պարզապես սեղմեք հղման վրա`,
     cityChanged: (city) => `✅ Քաղաքը փոխվեց: <b>${city}</b>`,
@@ -102,9 +102,9 @@ TuTak-ն սննդի շուրջ կառուցված հավատարմության �
   ru: {
     welcome: `🦜 Добро пожаловать в TuTak!
 
-TuTak — это программа лояльности вокруг еды.
-Заказывай у нас и партнёров, копи бонусы,
-приглашай друзей и трать бонусы на следующие заказы.
+TuTak — это единая программа лояльности, объединяющая заказы еды и зарядные станции для электромобилей:
+Заказывай еду в наших кухнях, пользуйся зарядными станциями (OCPI), копи бонусы,
+приглашай друзей и трать бонусы на следующие заказы или зарядку.
 
 Всё прозрачно. Всё честно.
 
@@ -146,7 +146,7 @@ TuTak — это программа лояльности вокруг еды.
     changeLanguage: '🌐 Сменить язык',
     emptyMenu: '📭 Меню пусто. Пожалуйста, подождите обновления.',
     bonusText: (available, frozen) => `<b>⭐ Ваши бонусы</b>\n\n🟢 Доступно: ${available} ֏\n⚫ Заморожено: ${frozen} ֏\n\n🔹 2% сразу, 3% открывается через 6 месяцев`,
-    referralText: (link) => `<b>👥 Реферальная программа</b>\n\n🔗 Ваша ссылка:\n<code>${link}</code>\n\n📊 Бонусы:\n• 1% - 1-й уровень\n• 0.5% - 2-й уровень\n• 0.25% - 3-й уровень`,
+    referralText: (link) => `<b>👥 Реферальная программа</b>\n\n🔗 Ваша ссылка:\n<code>${link}</code>\n\n📊 Бонусы:\n• 1% - 1-й уровень\n• 0.5% - 2-й уровень\n• 0.25% - 3-й уровень\n\n📱 Ваш персональный QR-код (сканируйте, чтобы пригласить друга).`,
     referralFriends: (count) => `👥 Ваши приглашенные: ${count}`,
     referralCopyHint: `💡 Чтобы скопировать ссылку, просто нажмите на неё`,
     cityChanged: (city) => `✅ Город изменён: <b>${city}</b>`,
@@ -202,9 +202,9 @@ TuTak — это программа лояльности вокруг еды.
   en: {
     welcome: `🦜 Welcome to TuTak!
 
-TuTak is a loyalty program built around food.
-Order from us and partners, accumulate bonuses,
-invite friends, and spend bonuses on future orders.
+TuTak is a unified loyalty program combining food orders and EV charging stations:
+Order food from our kitchens, use charging stations (OCPI), accumulate bonuses,
+invite friends, and spend bonuses on future orders or charging.
 
 Everything is transparent. Everything is fair.
 
@@ -246,7 +246,7 @@ The more active friends — the more bonuses! 🚀`,
     changeLanguage: '🌐 Change language',
     emptyMenu: '📭 Menu is empty. Please wait for update.',
     bonusText: (available, frozen) => `<b>⭐ Your bonuses</b>\n\n🟢 Available: ${available} AMD\n⚫ Frozen: ${frozen} AMD\n\n🔹 2% immediately, 3% unlocks after 6 months`,
-    referralText: (link) => `<b>👥 Referral program</b>\n\n🔗 Your link:\n<code>${link}</code>\n\n📊 Bonuses:\n• 1% - 1st level\n• 0.5% - 2nd level\n• 0.25% - 3rd level`,
+    referralText: (link) => `<b>👥 Referral program</b>\n\n🔗 Your link:\n<code>${link}</code>\n\n📊 Bonuses:\n• 1% - 1st level\n• 0.5% - 2nd level\n• 0.25% - 3rd level\n\n📱 Your personal QR code (scan to invite a friend).`,
     referralFriends: (count) => `👥 Your invited friends: ${count}`,
     referralCopyHint: `💡 To copy the link, just click on it`,
     cityChanged: (city) => `✅ City changed: <b>${city}</b>`,
