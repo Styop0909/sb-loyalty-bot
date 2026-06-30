@@ -2,8 +2,8 @@
   "name": "sb-loyalty-bot",
   "version": "1.0.0",
   "main": "index.js",
- "scripts": {
-  "start": "node src/ocpi/server.js"
+"scripts": {
+  "start": "node index.js"
 },
   "keywords": [],
   "author": "",
