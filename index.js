@@ -30,6 +30,7 @@ const {
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 8080;
+const QRCode = require('qrcode');
 
 app.get('/ocpi/versions', (req, res) => {
   res.json({
@@ -156,7 +157,10 @@ async function getReferralChain(userId) {
 bot.telegram.getMe().then((botInfo) => {
   console.log('✅ Բոտը միացավ:', botInfo.username);
 });
-
+async function generateReferralQR(userId) {
+  const link = `https://t.me/TuTak_Official_Bot?start=ref_${userId}`;
+  return await QRCode.toDataURL(link);
+}
 bot.start(async (ctx) => {
   ctx.session.cart = [];
   ctx.session.checkout = null;
@@ -695,12 +699,14 @@ bot.hears([getTranslation('hy', 'referral'), getTranslation('ru', 'referral'), g
       referralsText += `• ${ref.firstName || ref.username || ref.telegramId}\n`;
     }
   }
-  
   const hint = getTranslation(lang, 'referralCopyHint');
-  
-  ctx.reply(
-    `${getTranslation(lang, 'referralText', refLink)}\n${referralsText}\n\n💡 ${hint}`,
-    { parse_mode: 'HTML' }
+  const qrImage = await generateReferralQR(user.id);
+  await ctx.replyWithPhoto(
+    { source: Buffer.from(qrImage.split(',')[1], 'base64') },
+    {
+      caption: `${getTranslation(lang, 'referralText', refLink)}\n${referralsText}\n\n💡 ${hint}`,
+      parse_mode: 'HTML'
+    }
   );
 });
 
