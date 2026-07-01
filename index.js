@@ -41,17 +41,7 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 8080;
 const QRCode = require('qrcode');
-
-// ============================================
-// EXPRESS MIDDLEWARE
-// ============================================
 app.use(express.json());
-
-// ============================================
-// OCPI 2.2.1 ENDPOINTS
-// ============================================
-
-// Versions
 app.get('/ocpi/versions', (req, res) => {
   res.json({
     status_code: 1000,
@@ -76,7 +66,6 @@ app.get('/ocpi/details', (req, res) => {
   });
 });
 
-// Credentials handler (shared between both endpoints)
 const handleCredentials = async (req, res) => {
   try {
     const { token, url } = req.body;
@@ -134,16 +123,8 @@ app.post('/ocpi/2.2.1/credentials', handleCredentials);
 
 app.get('/ocpi/locations', async (req, res) => {
   try {
-    console.log('📍 Locations request received');
-    console.log('Headers:', req.headers);
-    
     const token = req.headers.authorization?.replace('Token ', '');
-    console.log('Token:', token);
-    
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    
-    if (token !== OUR_TOKEN) {
-      console.log('❌ Invalid token');
+    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
       return res.status(401).json({
         status_code: 2001,
         status_message: 'Invalid token',
@@ -151,43 +132,26 @@ app.get('/ocpi/locations', async (req, res) => {
       });
     }
 
-    console.log('✅ Token valid, fetching locations...');
-        let locations;
-    try {
-      locations = await db.select().from(locationsTable);
-      console.log(`✅ Found ${locations.length} locations`);
-    } catch (dbError) {
-      console.error('❌ Database error:', dbError);
-      return res.status(500).json({
-        status_code: 3000,
-        status_message: 'Database error: ' + dbError.message,
-        data: {}
-      });
-    }
-    
-    const responseData = locations.map(loc => ({
-      id: loc.id,
-      name: loc.name,
-      address: loc.address,
-      city: loc.city,
-      country: loc.country || 'AM',
-      coordinates: {
-        latitude: parseFloat(loc.latitude) || 0,
-        longitude: parseFloat(loc.longitude) || 0
-      },
-      evses: loc.evses || []
-    }));
-    
-    console.log('✅ Sending response with', responseData.length, 'locations');
+    const result = await db.select().from(locations);
     
     res.json({
       status_code: 1000,
       status_message: 'Success',
-      data: responseData
+      data: result.map(loc => ({
+        id: loc.id,
+        name: loc.name,
+        address: loc.address,
+        city: loc.city,
+        country: loc.country || 'AM',
+        coordinates: {
+          latitude: parseFloat(loc.latitude) || 0,
+          longitude: parseFloat(loc.longitude) || 0
+        },
+        evses: loc.evses || []
+      }))
     });
   } catch (error) {
-    console.error('❌ Locations error:', error);
-    console.error('Stack:', error.stack);
+    console.error('Locations error:', error);
     res.status(500).json({
       status_code: 3000,
       status_message: 'Internal server error: ' + error.message,
@@ -198,15 +162,8 @@ app.get('/ocpi/locations', async (req, res) => {
 
 app.get('/ocpi/tariffs', async (req, res) => {
   try {
-    console.log('💰 Tariffs request received');
-    
     const token = req.headers.authorization?.replace('Token ', '');
-    console.log('Token:', token);
-    
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    
-    if (token !== OUR_TOKEN) {
-      console.log('❌ Invalid token');
+    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
       return res.status(401).json({
         status_code: 2001,
         status_message: 'Invalid token',
@@ -214,39 +171,21 @@ app.get('/ocpi/tariffs', async (req, res) => {
       });
     }
 
-    console.log('✅ Token valid, fetching tariffs...');
-    
-    let tariffs;
-    try {
-      tariffs = await db.select().from(tariffsTable);
-      console.log(`✅ Found ${tariffs.length} tariffs`);
-    } catch (dbError) {
-      console.error('❌ Database error:', dbError);
-      return res.status(500).json({
-        status_code: 3000,
-        status_message: 'Database error: ' + dbError.message,
-        data: {}
-      });
-    }
-    
-    const responseData = tariffs.map(t => ({
-      id: t.id,
-      currency: t.currency || 'AMD',
-      elements: t.elements || {},
-      energy_price: parseFloat(t.energy_price) || 0,
-      parking_fee: parseFloat(t.parking_fee) || 0
-    }));
-    
-    console.log('✅ Sending response with', responseData.length, 'tariffs');
+    const result = await db.select().from(tariffs);
     
     res.json({
       status_code: 1000,
       status_message: 'Success',
-      data: responseData
+      data: result.map(t => ({
+        id: t.id,
+        currency: t.currency || 'AMD',
+        elements: t.elements || {},
+        energy_price: parseFloat(t.energyPrice) || 0,
+        parking_fee: parseFloat(t.parkingFee) || 0
+      }))
     });
   } catch (error) {
-    console.error('❌ Tariffs error:', error);
-    console.error('Stack:', error.stack);
+    console.error('Tariffs error:', error);
     res.status(500).json({
       status_code: 3000,
       status_message: 'Internal server error: ' + error.message,
@@ -257,16 +196,8 @@ app.get('/ocpi/tariffs', async (req, res) => {
 
 app.post('/ocpi/sessions', async (req, res) => {
   try {
-    console.log('📊 Sessions request received');
-    console.log('Body:', req.body);
-    
     const token = req.headers.authorization?.replace('Token ', '');
-    console.log('Token:', token);
-    
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    
-    if (token !== OUR_TOKEN) {
-      console.log('❌ Invalid token');
+    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
       return res.status(401).json({
         status_code: 2001,
         status_message: 'Invalid token',
@@ -275,37 +206,16 @@ app.post('/ocpi/sessions', async (req, res) => {
     }
 
     const session = req.body;
-    console.log('Session data:', session);
     
-    // Validate required fields
-    if (!session.id || !session.location_id || !session.start_date_time) {
-      console.log('❌ Missing required fields');
-      return res.status(400).json({
-        status_code: 2002,
-        status_message: 'Missing required fields',
-        data: {}
-      });
-    }
-    
-    try {
-      await db.insert(sessionsTable).values({
-        id: session.id,
-        location_id: session.location_id,
-        start_date: new Date(session.start_date_time),
-        end_date: session.end_date_time ? new Date(session.end_date_time) : null,
-        kwh: parseFloat(session.kwh) || 0,
-        total_cost: parseFloat(session.total_cost) || 0,
-        status: session.status || 'ACTIVE'
-      });
-      console.log('✅ Session stored successfully');
-    } catch (dbError) {
-      console.error('❌ Database error:', dbError);
-      return res.status(500).json({
-        status_code: 3000,
-        status_message: 'Database error: ' + dbError.message,
-        data: {}
-      });
-    }
+    await db.insert(sessions).values({
+      id: session.id,
+      locationId: session.location_id,
+      startDate: new Date(session.start_date_time),
+      endDate: session.end_date_time ? new Date(session.end_date_time) : null,
+      kwh: session.kwh || 0,
+      totalCost: session.total_cost || 0,
+      status: session.status || 'ACTIVE'
+    });
 
     res.json({
       status_code: 1000,
@@ -313,8 +223,7 @@ app.post('/ocpi/sessions', async (req, res) => {
       data: {}
     });
   } catch (error) {
-    console.error('❌ Sessions error:', error);
-    console.error('Stack:', error.stack);
+    console.error('Sessions error:', error);
     res.status(500).json({
       status_code: 3000,
       status_message: 'Internal server error: ' + error.message,
@@ -355,24 +264,13 @@ app.get('/ocpi/cpo/:id', async (req, res) => {
     });
   }
 });
-
-// OCPI Router
 app.use('/ocpi', ocpiRouter);
-
-// Health check
 app.get('/', (req, res) => {
   res.send('TuTak Bot is running!');
 });
-
-// Start server
 app.listen(port, () => {
   console.log(`✅ HTTP server running on port ${port}`);
 });
-
-// ============================================
-// TELEGRAM BOT
-// ============================================
-
 const bot = new Telegraf(process.env.BOT_TOKEN);
 bot.use(new LocalSession({ database: 'session_db.json' }).middleware());
 
