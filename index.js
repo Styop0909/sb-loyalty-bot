@@ -9,9 +9,9 @@ const {
   bonusTransactions, 
   partners, 
   userBonusesByPartner,
-  locations: locationsTable,
-  tariffs: tariffsTable,
-  sessions: sessionsTable
+  locations,
+  tariffs,
+  sessions
 } = require('./src/db/schema');
 const { eq, desc, and } = require('drizzle-orm');
 const { getTranslation } = require('./i18n');
