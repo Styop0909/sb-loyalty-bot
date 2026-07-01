@@ -114,7 +114,146 @@ app.post('/ocpi/2.2.1/credentials', async (req, res) => {
   req.url = '/ocpi/credentials';
   app.handle(req, res);
 });
+app.get('/ocpi/locations', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Token ', '');
+    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
 
+    const locations = await db.select().from(locations);
+    
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: locations.map(loc => ({
+        id: loc.id,
+        name: loc.name,
+        address: loc.address,
+        city: loc.city,
+        country: 'AM',
+        coordinates: {
+          latitude: loc.latitude,
+          longitude: loc.longitude
+        },
+        evses: loc.evses || []
+      }))
+    });
+  } catch (error) {
+    console.error('Locations error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error',
+      data: {}
+    });
+  }
+});
+app.get('/ocpi/tariffs', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Token ', '');
+    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    const tariffs = await db.select().from(tariffs);
+    
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: tariffs.map(t => ({
+        id: t.id,
+        currency: 'AMD',
+        elements: t.elements,
+        energy_price: t.energy_price,
+        parking_fee: t.parking_fee
+      }))
+    });
+  } catch (error) {
+    console.error('Tariffs error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error',
+      data: {}
+    });
+  }
+});
+app.post('/ocpi/sessions', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Token ', '');
+    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    const session = req.body;
+    // Store session in database
+    await db.insert(sessions).values({
+      id: session.id,
+      location_id: session.location_id,
+      start_date: new Date(session.start_date_time),
+      end_date: session.end_date_time ? new Date(session.end_date_time) : null,
+      kwh: session.kwh,
+      total_cost: session.total_cost,
+      status: session.status
+    });
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: {}
+    });
+  } catch (error) {
+    console.error('Sessions error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error',
+      data: {}
+    });
+  }
+});
+app.get('/ocpi/cpo/:id', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Token ', '');
+    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    // Check if user has enough balance
+    const userId = req.params.id;
+    const user = await db.select().from(users).where(eq(users.id, userId)).then(r => r[0]);
+    
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: {
+        allowed: user?.bonusBalance > 1000 || false,
+        token: `token_${user?.id}_${Date.now()}`
+      }
+    });
+  } catch (error) {
+    console.error('Authorization error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error',
+      data: {}
+    });
+  }
+});
 app.use('/ocpi', ocpiRouter);
 
 app.get('/', (req, res) => {
