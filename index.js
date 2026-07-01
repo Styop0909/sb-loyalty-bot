@@ -12,7 +12,7 @@ const {
   locations,
   tariffs,
   sessions
-} = require('./src/db/schema');
+} = require('./src/db/schema.js');
 const { eq, desc, and } = require('drizzle-orm');
 const { getTranslation } = require('./i18n');
 const { sql } = require('drizzle-orm');
