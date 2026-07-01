@@ -55,8 +55,63 @@ app.get('/ocpi/details', (req, res) => {
   });
 });
 
-app.post('/ocpi/credentials', (req, res) => {
-  res.status(501).json({ status_code: 501, status_message: 'Not implemented yet' });
+app.post('/ocpi/credentials', async (req, res) => {
+  try {
+    const { token, url } = req.body;
+    console.log('📥 Credentials request received:');
+    console.log('Token:', token);
+    console.log('URL:', url);
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+        if (token !== OUR_TOKEN) {
+      console.log('❌ Invalid token received');
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+    try {
+      const fs = require('fs');
+      let connections = [];
+      try {
+        const data = fs.readFileSync('./connections.json', 'utf8');
+        connections = JSON.parse(data);
+      } catch (e) {
+      }
+      connections.push({
+        partner: 'fast_charge',
+        url: url,
+        token: token,
+        status: 'active',
+        created_at: new Date().toISOString()
+      });
+      fs.writeFileSync('./connections.json', JSON.stringify(connections, null, 2));
+      console.log('✅ Fast Charge connection stored successfully');
+    } catch (error) {
+      console.error('⚠️ Could not store connection:', error.message);
+    }
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: {
+        token: OUR_TOKEN,
+        url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Credentials error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+app.post('/ocpi/2.2.1/credentials', async (req, res) => {
+  // Redirect to main credentials handler
+  const originalUrl = req.originalUrl;
+  req.url = '/ocpi/credentials';
+  app.handle(req, res);
 });
 
 app.use(express.json());
