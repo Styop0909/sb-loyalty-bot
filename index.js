@@ -129,15 +129,21 @@ const handleCredentials = async (req, res) => {
   }
 };
 
-// Credentials endpoints
 app.post('/ocpi/credentials', handleCredentials);
 app.post('/ocpi/2.2.1/credentials', handleCredentials);
 
-// Locations
 app.get('/ocpi/locations', async (req, res) => {
   try {
+    console.log('📍 Locations request received');
+    console.log('Headers:', req.headers);
+    
     const token = req.headers.authorization?.replace('Token ', '');
-    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
+    console.log('Token:', token);
+    
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    
+    if (token !== OUR_TOKEN) {
+      console.log('❌ Invalid token');
       return res.status(401).json({
         status_code: 2001,
         status_message: 'Invalid token',
@@ -145,39 +151,62 @@ app.get('/ocpi/locations', async (req, res) => {
       });
     }
 
-    const locations = await db.select().from(locationsTable);
+    console.log('✅ Token valid, fetching locations...');
+        let locations;
+    try {
+      locations = await db.select().from(locationsTable);
+      console.log(`✅ Found ${locations.length} locations`);
+    } catch (dbError) {
+      console.error('❌ Database error:', dbError);
+      return res.status(500).json({
+        status_code: 3000,
+        status_message: 'Database error: ' + dbError.message,
+        data: {}
+      });
+    }
+    
+    const responseData = locations.map(loc => ({
+      id: loc.id,
+      name: loc.name,
+      address: loc.address,
+      city: loc.city,
+      country: loc.country || 'AM',
+      coordinates: {
+        latitude: parseFloat(loc.latitude) || 0,
+        longitude: parseFloat(loc.longitude) || 0
+      },
+      evses: loc.evses || []
+    }));
+    
+    console.log('✅ Sending response with', responseData.length, 'locations');
     
     res.json({
       status_code: 1000,
       status_message: 'Success',
-      data: locations.map(loc => ({
-        id: loc.id,
-        name: loc.name,
-        address: loc.address,
-        city: loc.city,
-        country: 'AM',
-        coordinates: {
-          latitude: loc.latitude,
-          longitude: loc.longitude
-        },
-        evses: loc.evses || []
-      }))
+      data: responseData
     });
   } catch (error) {
-    console.error('Locations error:', error);
+    console.error('❌ Locations error:', error);
+    console.error('Stack:', error.stack);
     res.status(500).json({
       status_code: 3000,
-      status_message: 'Internal server error',
+      status_message: 'Internal server error: ' + error.message,
       data: {}
     });
   }
 });
 
-// Tariffs
 app.get('/ocpi/tariffs', async (req, res) => {
   try {
+    console.log('💰 Tariffs request received');
+    
     const token = req.headers.authorization?.replace('Token ', '');
-    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
+    console.log('Token:', token);
+    
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    
+    if (token !== OUR_TOKEN) {
+      console.log('❌ Invalid token');
       return res.status(401).json({
         status_code: 2001,
         status_message: 'Invalid token',
@@ -185,34 +214,59 @@ app.get('/ocpi/tariffs', async (req, res) => {
       });
     }
 
-    const tariffs = await db.select().from(tariffsTable);
+    console.log('✅ Token valid, fetching tariffs...');
+    
+    let tariffs;
+    try {
+      tariffs = await db.select().from(tariffsTable);
+      console.log(`✅ Found ${tariffs.length} tariffs`);
+    } catch (dbError) {
+      console.error('❌ Database error:', dbError);
+      return res.status(500).json({
+        status_code: 3000,
+        status_message: 'Database error: ' + dbError.message,
+        data: {}
+      });
+    }
+    
+    const responseData = tariffs.map(t => ({
+      id: t.id,
+      currency: t.currency || 'AMD',
+      elements: t.elements || {},
+      energy_price: parseFloat(t.energy_price) || 0,
+      parking_fee: parseFloat(t.parking_fee) || 0
+    }));
+    
+    console.log('✅ Sending response with', responseData.length, 'tariffs');
     
     res.json({
       status_code: 1000,
       status_message: 'Success',
-      data: tariffs.map(t => ({
-        id: t.id,
-        currency: 'AMD',
-        elements: t.elements,
-        energy_price: t.energy_price,
-        parking_fee: t.parking_fee
-      }))
+      data: responseData
     });
   } catch (error) {
-    console.error('Tariffs error:', error);
+    console.error('❌ Tariffs error:', error);
+    console.error('Stack:', error.stack);
     res.status(500).json({
       status_code: 3000,
-      status_message: 'Internal server error',
+      status_message: 'Internal server error: ' + error.message,
       data: {}
     });
   }
 });
 
-// Sessions
 app.post('/ocpi/sessions', async (req, res) => {
   try {
+    console.log('📊 Sessions request received');
+    console.log('Body:', req.body);
+    
     const token = req.headers.authorization?.replace('Token ', '');
-    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
+    console.log('Token:', token);
+    
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    
+    if (token !== OUR_TOKEN) {
+      console.log('❌ Invalid token');
       return res.status(401).json({
         status_code: 2001,
         status_message: 'Invalid token',
@@ -221,15 +275,37 @@ app.post('/ocpi/sessions', async (req, res) => {
     }
 
     const session = req.body;
-    await db.insert(sessionsTable).values({
-      id: session.id,
-      location_id: session.location_id,
-      start_date: new Date(session.start_date_time),
-      end_date: session.end_date_time ? new Date(session.end_date_time) : null,
-      kwh: session.kwh,
-      total_cost: session.total_cost,
-      status: session.status
-    });
+    console.log('Session data:', session);
+    
+    // Validate required fields
+    if (!session.id || !session.location_id || !session.start_date_time) {
+      console.log('❌ Missing required fields');
+      return res.status(400).json({
+        status_code: 2002,
+        status_message: 'Missing required fields',
+        data: {}
+      });
+    }
+    
+    try {
+      await db.insert(sessionsTable).values({
+        id: session.id,
+        location_id: session.location_id,
+        start_date: new Date(session.start_date_time),
+        end_date: session.end_date_time ? new Date(session.end_date_time) : null,
+        kwh: parseFloat(session.kwh) || 0,
+        total_cost: parseFloat(session.total_cost) || 0,
+        status: session.status || 'ACTIVE'
+      });
+      console.log('✅ Session stored successfully');
+    } catch (dbError) {
+      console.error('❌ Database error:', dbError);
+      return res.status(500).json({
+        status_code: 3000,
+        status_message: 'Database error: ' + dbError.message,
+        data: {}
+      });
+    }
 
     res.json({
       status_code: 1000,
@@ -237,16 +313,17 @@ app.post('/ocpi/sessions', async (req, res) => {
       data: {}
     });
   } catch (error) {
-    console.error('Sessions error:', error);
+    console.error('❌ Sessions error:', error);
+    console.error('Stack:', error.stack);
     res.status(500).json({
       status_code: 3000,
-      status_message: 'Internal server error',
+      status_message: 'Internal server error: ' + error.message,
       data: {}
     });
   }
 });
 
-// CPO Authorization
+
 app.get('/ocpi/cpo/:id', async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Token ', '');
