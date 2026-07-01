@@ -2,7 +2,17 @@ const { Telegraf, Markup } = require('telegraf');
 const LocalSession = require('telegraf-session-local');
 require('dotenv').config();
 const { db } = require('./src/db');
-const { users, orders, menuItems, bonusTransactions, partners, userBonusesByPartner } = require('./src/db/schema');
+const { 
+  users, 
+  orders, 
+  menuItems, 
+  bonusTransactions, 
+  partners, 
+  userBonusesByPartner,
+  locations: locationsTable,
+  tariffs: tariffsTable,
+  sessions: sessionsTable
+} = require('./src/db/schema');
 const { eq, desc, and } = require('drizzle-orm');
 const { getTranslation } = require('./i18n');
 const { sql } = require('drizzle-orm');
@@ -31,8 +41,17 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 8080;
 const QRCode = require('qrcode');
+
+// ============================================
+// EXPRESS MIDDLEWARE
+// ============================================
 app.use(express.json());
 
+// ============================================
+// OCPI 2.2.1 ENDPOINTS
+// ============================================
+
+// Versions
 app.get('/ocpi/versions', (req, res) => {
   res.json({
     status_code: 1000,
@@ -42,6 +61,7 @@ app.get('/ocpi/versions', (req, res) => {
   });
 });
 
+// Details
 app.get('/ocpi/details', (req, res) => {
   res.json({
     status_code: 1000,
@@ -56,14 +76,15 @@ app.get('/ocpi/details', (req, res) => {
   });
 });
 
-app.post('/ocpi/credentials', async (req, res) => {
+// Credentials handler (shared between both endpoints)
+const handleCredentials = async (req, res) => {
   try {
     const { token, url } = req.body;
     console.log('📥 Credentials request received:');
     console.log('Token:', token);
     console.log('URL:', url);
     const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-        if (token !== OUR_TOKEN) {
+    if (token !== OUR_TOKEN) {
       console.log('❌ Invalid token received');
       return res.status(401).json({
         status_code: 2001,
@@ -77,8 +98,7 @@ app.post('/ocpi/credentials', async (req, res) => {
       try {
         const data = fs.readFileSync('./connections.json', 'utf8');
         connections = JSON.parse(data);
-      } catch (e) {
-      }
+      } catch (e) {}
       connections.push({
         partner: 'fast_charge',
         url: url,
@@ -107,13 +127,13 @@ app.post('/ocpi/credentials', async (req, res) => {
       data: {}
     });
   }
-});
-app.post('/ocpi/2.2.1/credentials', async (req, res) => {
-  // Redirect to main credentials handler
-  const originalUrl = req.originalUrl;
-  req.url = '/ocpi/credentials';
-  app.handle(req, res);
-});
+};
+
+// Credentials endpoints
+app.post('/ocpi/credentials', handleCredentials);
+app.post('/ocpi/2.2.1/credentials', handleCredentials);
+
+// Locations
 app.get('/ocpi/locations', async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Token ', '');
@@ -125,7 +145,7 @@ app.get('/ocpi/locations', async (req, res) => {
       });
     }
 
-    const locations = await db.select().from(locations);
+    const locations = await db.select().from(locationsTable);
     
     res.json({
       status_code: 1000,
@@ -152,6 +172,8 @@ app.get('/ocpi/locations', async (req, res) => {
     });
   }
 });
+
+// Tariffs
 app.get('/ocpi/tariffs', async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Token ', '');
@@ -163,7 +185,7 @@ app.get('/ocpi/tariffs', async (req, res) => {
       });
     }
 
-    const tariffs = await db.select().from(tariffs);
+    const tariffs = await db.select().from(tariffsTable);
     
     res.json({
       status_code: 1000,
@@ -185,6 +207,8 @@ app.get('/ocpi/tariffs', async (req, res) => {
     });
   }
 });
+
+// Sessions
 app.post('/ocpi/sessions', async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Token ', '');
@@ -197,8 +221,7 @@ app.post('/ocpi/sessions', async (req, res) => {
     }
 
     const session = req.body;
-    // Store session in database
-    await db.insert(sessions).values({
+    await db.insert(sessionsTable).values({
       id: session.id,
       location_id: session.location_id,
       start_date: new Date(session.start_date_time),
@@ -222,6 +245,8 @@ app.post('/ocpi/sessions', async (req, res) => {
     });
   }
 });
+
+// CPO Authorization
 app.get('/ocpi/cpo/:id', async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Token ', '');
@@ -233,7 +258,6 @@ app.get('/ocpi/cpo/:id', async (req, res) => {
       });
     }
 
-    // Check if user has enough balance
     const userId = req.params.id;
     const user = await db.select().from(users).where(eq(users.id, userId)).then(r => r[0]);
     
@@ -254,15 +278,23 @@ app.get('/ocpi/cpo/:id', async (req, res) => {
     });
   }
 });
+
+// OCPI Router
 app.use('/ocpi', ocpiRouter);
 
+// Health check
 app.get('/', (req, res) => {
   res.send('TuTak Bot is running!');
 });
 
+// Start server
 app.listen(port, () => {
   console.log(`✅ HTTP server running on port ${port}`);
 });
+
+// ============================================
+// TELEGRAM BOT
+// ============================================
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 bot.use(new LocalSession({ database: 'session_db.json' }).middleware());
@@ -350,10 +382,12 @@ async function getReferralChain(userId) {
 bot.telegram.getMe().then((botInfo) => {
   console.log('✅ Բոտը միացավ:', botInfo.username);
 });
+
 async function generateReferralQR(userId) {
   const link = `https://t.me/TuTak_Official_Bot?start=ref_${userId}`;
   return await QRCode.toDataURL(link);
 }
+
 bot.start(async (ctx) => {
   ctx.session.cart = [];
   ctx.session.checkout = null;
