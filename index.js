@@ -31,6 +31,7 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 8080;
 const QRCode = require('qrcode');
+app.use(express.json());
 
 app.get('/ocpi/versions', (req, res) => {
   res.json({
@@ -113,8 +114,6 @@ app.post('/ocpi/2.2.1/credentials', async (req, res) => {
   req.url = '/ocpi/credentials';
   app.handle(req, res);
 });
-
-app.use(express.json());
 
 app.use('/ocpi', ocpiRouter);
 
