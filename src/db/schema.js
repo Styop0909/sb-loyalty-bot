@@ -1,4 +1,4 @@
-const { pgTable, serial, bigint, varchar, integer, boolean, timestamp, text } = require('drizzle-orm/pg-core');
+const { pgTable, serial, bigint, varchar, integer, boolean, timestamp, text, decimal, jsonb } = require('drizzle-orm/pg-core');
 
 const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -66,6 +66,7 @@ const complaints = pgTable('complaints', {
   adminBonusGiven: boolean('admin_bonus_given').default(false),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
 const partners = pgTable('partners', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 200 }).notNull(),
@@ -90,6 +91,40 @@ const userBonusesByPartner = pgTable('user_bonuses_by_partner', {
   orderId: integer('order_id'),
   createdAt: timestamp('created_at').defaultNow(),
 });
+const locations = pgTable('locations', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  address: text('address'),
+  city: varchar('city', { length: 100 }),
+  country: varchar('country', { length: 2 }).default('AM'),
+  latitude: decimal('latitude', { precision: 10, scale: 8 }),
+  longitude: decimal('longitude', { precision: 11, scale: 8 }),
+  evses: jsonb('evses').default([]),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+const tariffs = pgTable('tariffs', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  currency: varchar('currency', { length: 3 }).default('AMD'),
+  elements: jsonb('elements'),
+  energyPrice: decimal('energy_price', { precision: 10, scale: 2 }),
+  parkingFee: decimal('parking_fee', { precision: 10, scale: 2 }),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+const sessions = pgTable('sessions', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  locationId: varchar('location_id', { length: 255 }),
+  startDate: timestamp('start_date').notNull(),
+  endDate: timestamp('end_date'),
+  kwh: decimal('kwh', { precision: 10, scale: 2 }),
+  totalCost: decimal('total_cost', { precision: 10, scale: 2 }),
+  status: varchar('status', { length: 50 }),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
 
 module.exports = {
   users,
@@ -99,4 +134,7 @@ module.exports = {
   complaints,
   partners,
   userBonusesByPartner,
+  locations,
+  tariffs,
+  sessions,
 };
