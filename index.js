@@ -299,10 +299,39 @@ function languageMenu(lang) {
     [getTranslation(lang, 'back')]
   ]).resize();
 }
+function normalizePhone(phone) {
+  let cleaned = phone.replace(/[\s\-\(\)]/g, '');
+    if (cleaned.startsWith('0') && cleaned.length === 9) {
+    return '+374' + cleaned.slice(1);
+  }
+    if (cleaned.startsWith('374') && cleaned.length === 11) {
+    return '+' + cleaned;
+  }
+    if (cleaned.startsWith('+374') && cleaned.length === 12) {
+    return cleaned;
+  }
+    if (cleaned.length === 8) {
+    return '+374' + cleaned;
+  }
+    if (cleaned.length === 10 && !cleaned.startsWith('0')) {
+    return '+' + cleaned;
+  }
+    if (cleaned.length === 11 && cleaned.startsWith('374')) {
+    return '+' + cleaned;
+  }
+    if (cleaned.startsWith('+') && cleaned.length >= 10) {
+    return cleaned;
+  }
+  return null;
+}
 
 function validatePhone(phone) {
-  const regex = /^\+374\d{8}$/;
-  return regex.test(phone);
+  const normalized = normalizePhone(phone);
+  if (!normalized) return null;
+    if (normalized.length < 10) return null;
+  if (!/^[\+\d]+$/.test(normalized)) return null;
+  
+  return normalized;
 }
 
 async function registerUser(telegramId, firstName, lastName, username, invitedBy = null) {
@@ -708,13 +737,20 @@ bot.on('text', async (ctx, next) => {
     return;
   }
   
-  if (ctx.session.waitingForPhone) {
-    const phone = ctx.message.text.trim();
-    if (!validatePhone(phone)) {
-      return ctx.reply(getTranslation(user.language, 'invalidPhone'));
-    }
-    await db.update(users).set({ phone: phone, phoneVerified: true }).where(eq(users.telegramId, ctx.from.id));
-    ctx.session.waitingForPhone = false;
+if (ctx.session.waitingForPhone) {
+  const phone = ctx.message.text.trim();
+  const normalizedPhone = validatePhone(phone);
+  
+  if (!normalizedPhone) {
+    return ctx.reply(getTranslation(user.language, 'invalidPhone'));
+  }
+  
+  await db.update(users).set({ 
+    phone: normalizedPhone, 
+    phoneVerified: true 
+  }).where(eq(users.telegramId, ctx.from.id));
+  
+  ctx.session.waitingForPhone = false;
     
     const { cart, total, bonusToUse, address } = ctx.session.checkout;
     const finalTotal = total - bonusToUse;
