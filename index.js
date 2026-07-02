@@ -42,6 +42,12 @@ const app = express();
 const port = process.env.PORT || 8080;
 const QRCode = require('qrcode');
 app.use(express.json());
+
+let locationsCache = null;
+let tariffsCache = null;
+let lastLocationsFetch = 0;
+let lastTariffsFetch = 0;
+
 app.get('/ocpi/versions', (req, res) => {
   res.json({
     status_code: 1000,
@@ -51,7 +57,6 @@ app.get('/ocpi/versions', (req, res) => {
   });
 });
 
-// Details
 app.get('/ocpi/details', (req, res) => {
   res.json({
     status_code: 1000,
@@ -68,12 +73,50 @@ app.get('/ocpi/details', (req, res) => {
 
 const handleCredentials = async (req, res) => {
   try {
-    const { token, url } = req.body;
     console.log('📥 Credentials request received:');
-    console.log('Token:', token);
-    console.log('URL:', url);
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Token ')) {
+      console.log('❌ No Authorization header');
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Missing authorization header',
+        data: {}
+      });
+    }
+    
+    const base64Token = authHeader.replace('Token ', '');
+    let headerToken;
+    try {
+      headerToken = Buffer.from(base64Token, 'base64').toString('utf8');
+      console.log('✅ Header token decoded:', headerToken);
+    } catch (e) {
+      console.log('❌ Invalid base64 token');
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const bodyToken = req.body.token;
+    const url = req.body.url;
+    console.log('📥 Body token:', bodyToken);
+    console.log('📥 URL:', url);
+
+    if (headerToken !== bodyToken) {
+      console.log('❌ Token mismatch');
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Token mismatch between header and body',
+        data: {}
+      });
+    }
+
     const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
+    if (headerToken !== OUR_TOKEN) {
       console.log('❌ Invalid token received');
       return res.status(401).json({
         status_code: 2001,
@@ -81,6 +124,7 @@ const handleCredentials = async (req, res) => {
         data: {}
       });
     }
+
     try {
       const fs = require('fs');
       let connections = [];
@@ -91,7 +135,7 @@ const handleCredentials = async (req, res) => {
       connections.push({
         partner: 'fast_charge',
         url: url,
-        token: token,
+        token: headerToken,
         status: 'active',
         created_at: new Date().toISOString()
       });
@@ -100,6 +144,7 @@ const handleCredentials = async (req, res) => {
     } catch (error) {
       console.error('⚠️ Could not store connection:', error.message);
     }
+
     res.json({
       status_code: 1000,
       status_message: 'Success',
@@ -121,10 +166,23 @@ const handleCredentials = async (req, res) => {
 app.post('/ocpi/credentials', handleCredentials);
 app.post('/ocpi/2.2.1/credentials', handleCredentials);
 
-app.get('/ocpi/locations', async (req, res) => {
+app.post('/ocpi/locations', async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Token ', '');
-    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
       return res.status(401).json({
         status_code: 2001,
         status_message: 'Invalid token',
@@ -132,7 +190,147 @@ app.get('/ocpi/locations', async (req, res) => {
       });
     }
 
-    const result = await db.select().from(locations);
+    const locationsData = req.body;
+    console.log('📍 Received', locationsData.length, 'locations');
+    
+    for (const location of locationsData) {
+      const hasOnlineConnector = location.evses?.some(evse => 
+        evse.connectors?.some(conn => conn.status === 'online')
+      ) || false;
+      
+      await db.insert(locations).values({
+        id: location.id,
+        name: location.name,
+        address: location.address,
+        city: location.city,
+        country: location.country || 'AM',
+        latitude: location.coordinates?.latitude || 0,
+        longitude: location.coordinates?.longitude || 0,
+        evses: location.evses || [],
+        publish: location.publish !== false,
+        isOnline: hasOnlineConnector,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }).onConflictDoUpdate({
+        target: locations.id,
+        set: {
+          name: location.name,
+          address: location.address,
+          city: location.city,
+          country: location.country || 'AM',
+          latitude: location.coordinates?.latitude || 0,
+          longitude: location.coordinates?.longitude || 0,
+          evses: location.evses || [],
+          publish: location.publish !== false,
+          isOnline: hasOnlineConnector,
+          updatedAt: new Date()
+        }
+      });
+    }
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: {}
+    });
+  } catch (error) {
+    console.error('❌ Locations error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.post('/ocpi/tariffs', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    const tariffsData = req.body;
+    console.log('💰 Received', tariffsData.length, 'tariffs');
+    
+    for (const tariff of tariffsData) {
+      await db.insert(tariffs).values({
+        id: tariff.id,
+        currency: tariff.currency || 'AMD',
+        elements: tariff.elements || {},
+        energyPrice: tariff.energy_price || 0,
+        parkingFee: tariff.parking_fee || 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }).onConflictDoUpdate({
+        target: tariffs.id,
+        set: {
+          currency: tariff.currency || 'AMD',
+          elements: tariff.elements || {},
+          energyPrice: tariff.energy_price || 0,
+          parkingFee: tariff.parking_fee || 0,
+          updatedAt: new Date()
+        }
+      });
+    }
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: {}
+    });
+  } catch (error) {
+    console.error('❌ Tariffs error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.get('/ocpi/locations', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    const result = await db.select().from(locations).where(eq(locations.publish, true));
     
     res.json({
       status_code: 1000,
@@ -162,8 +360,21 @@ app.get('/ocpi/locations', async (req, res) => {
 
 app.get('/ocpi/tariffs', async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Token ', '');
-    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
       return res.status(401).json({
         status_code: 2001,
         status_message: 'Invalid token',
@@ -196,8 +407,21 @@ app.get('/ocpi/tariffs', async (req, res) => {
 
 app.post('/ocpi/sessions', async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Token ', '');
-    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
       return res.status(401).json({
         status_code: 2001,
         status_message: 'Invalid token',
@@ -232,11 +456,23 @@ app.post('/ocpi/sessions', async (req, res) => {
   }
 });
 
-
 app.get('/ocpi/cpo/:id', async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Token ', '');
-    if (token !== '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45') {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
       return res.status(401).json({
         status_code: 2001,
         status_message: 'Invalid token',
@@ -264,6 +500,7 @@ app.get('/ocpi/cpo/:id', async (req, res) => {
     });
   }
 });
+
 app.use('/ocpi', ocpiRouter);
 app.get('/', (req, res) => {
   res.send('TuTak Bot is running!');
@@ -271,6 +508,7 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
   console.log(`✅ HTTP server running on port ${port}`);
 });
+
 const bot = new Telegraf(process.env.BOT_TOKEN);
 bot.use(new LocalSession({ database: 'session_db.json' }).middleware());
 
@@ -299,27 +537,28 @@ function languageMenu(lang) {
     [getTranslation(lang, 'back')]
   ]).resize();
 }
+
 function normalizePhone(phone) {
   let cleaned = phone.replace(/[\s\-\(\)]/g, '');
-    if (cleaned.startsWith('0') && cleaned.length === 9) {
+  if (cleaned.startsWith('0') && cleaned.length === 9) {
     return '+374' + cleaned.slice(1);
   }
-    if (cleaned.startsWith('374') && cleaned.length === 11) {
+  if (cleaned.startsWith('374') && cleaned.length === 11) {
     return '+' + cleaned;
   }
-    if (cleaned.startsWith('+374') && cleaned.length === 12) {
+  if (cleaned.startsWith('+374') && cleaned.length === 12) {
     return cleaned;
   }
-    if (cleaned.length === 8) {
+  if (cleaned.length === 8) {
     return '+374' + cleaned;
   }
-    if (cleaned.length === 10 && !cleaned.startsWith('0')) {
+  if (cleaned.length === 10 && !cleaned.startsWith('0')) {
     return '+' + cleaned;
   }
-    if (cleaned.length === 11 && cleaned.startsWith('374')) {
+  if (cleaned.length === 11 && cleaned.startsWith('374')) {
     return '+' + cleaned;
   }
-    if (cleaned.startsWith('+') && cleaned.length >= 10) {
+  if (cleaned.startsWith('+') && cleaned.length >= 10) {
     return cleaned;
   }
   return null;
@@ -328,9 +567,8 @@ function normalizePhone(phone) {
 function validatePhone(phone) {
   const normalized = normalizePhone(phone);
   if (!normalized) return null;
-    if (normalized.length < 10) return null;
+  if (normalized.length < 10) return null;
   if (!/^[\+\d]+$/.test(normalized)) return null;
-  
   return normalized;
 }
 
@@ -737,20 +975,20 @@ bot.on('text', async (ctx, next) => {
     return;
   }
   
-if (ctx.session.waitingForPhone) {
-  const phone = ctx.message.text.trim();
-  const normalizedPhone = validatePhone(phone);
-  
-  if (!normalizedPhone) {
-    return ctx.reply(getTranslation(user.language, 'invalidPhone'));
-  }
-  
-  await db.update(users).set({ 
-    phone: normalizedPhone, 
-    phoneVerified: true 
-  }).where(eq(users.telegramId, ctx.from.id));
-  
-  ctx.session.waitingForPhone = false;
+  if (ctx.session.waitingForPhone) {
+    const phone = ctx.message.text.trim();
+    const normalizedPhone = validatePhone(phone);
+    
+    if (!normalizedPhone) {
+      return ctx.reply(getTranslation(user.language, 'invalidPhone'));
+    }
+    
+    await db.update(users).set({ 
+      phone: normalizedPhone, 
+      phoneVerified: true 
+    }).where(eq(users.telegramId, ctx.from.id));
+    
+    ctx.session.waitingForPhone = false;
     
     const { cart, total, bonusToUse, address } = ctx.session.checkout;
     const finalTotal = total - bonusToUse;
