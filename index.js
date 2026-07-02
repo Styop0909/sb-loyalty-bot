@@ -191,6 +191,14 @@ app.post('/ocpi/locations', async (req, res) => {
     }
 
     const locationsData = req.body;
+    if (!Array.isArray(locationsData)) {
+      return res.status(400).json({
+        status_code: 2002,
+        status_message: 'Invalid data format, expected array',
+        data: {}
+      });
+    }
+    
     console.log('📍 Received', locationsData.length, 'locations');
     
     for (const location of locationsData) {
@@ -198,34 +206,24 @@ app.post('/ocpi/locations', async (req, res) => {
         evse.connectors?.some(conn => conn.status === 'online')
       ) || false;
       
-      await db.insert(locations).values({
-        id: location.id,
-        name: location.name,
-        address: location.address,
-        city: location.city,
-        country: location.country || 'AM',
-        latitude: location.coordinates?.latitude || 0,
-        longitude: location.coordinates?.longitude || 0,
-        evses: location.evses || [],
-        publish: location.publish !== false,
-        isOnline: hasOnlineConnector,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }).onConflictDoUpdate({
-        target: locations.id,
-        set: {
-          name: location.name,
-          address: location.address,
-          city: location.city,
-          country: location.country || 'AM',
-          latitude: location.coordinates?.latitude || 0,
-          longitude: location.coordinates?.longitude || 0,
-          evses: location.evses || [],
-          publish: location.publish !== false,
-          isOnline: hasOnlineConnector,
-          updatedAt: new Date()
-        }
-      });
+      await db.execute(sql`
+        INSERT INTO locations (id, name, address, city, country, latitude, longitude, evses, publish, is_online, created_at, updated_at)
+        VALUES (${location.id}, ${location.name}, ${location.address}, ${location.city}, ${location.country || 'AM'}, 
+                ${location.coordinates?.latitude || 0}, ${location.coordinates?.longitude || 0}, 
+                ${JSON.stringify(location.evses || [])}, ${location.publish !== false}, ${hasOnlineConnector}, 
+                NOW(), NOW())
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          address = EXCLUDED.address,
+          city = EXCLUDED.city,
+          country = EXCLUDED.country,
+          latitude = EXCLUDED.latitude,
+          longitude = EXCLUDED.longitude,
+          evses = EXCLUDED.evses,
+          publish = EXCLUDED.publish,
+          is_online = EXCLUDED.is_online,
+          updated_at = NOW()
+      `);
     }
 
     res.json({
@@ -268,27 +266,28 @@ app.post('/ocpi/tariffs', async (req, res) => {
     }
 
     const tariffsData = req.body;
+    if (!Array.isArray(tariffsData)) {
+      return res.status(400).json({
+        status_code: 2002,
+        status_message: 'Invalid data format, expected array',
+        data: {}
+      });
+    }
+    
     console.log('💰 Received', tariffsData.length, 'tariffs');
     
     for (const tariff of tariffsData) {
-      await db.insert(tariffs).values({
-        id: tariff.id,
-        currency: tariff.currency || 'AMD',
-        elements: tariff.elements || {},
-        energyPrice: tariff.energy_price || 0,
-        parkingFee: tariff.parking_fee || 0,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }).onConflictDoUpdate({
-        target: tariffs.id,
-        set: {
-          currency: tariff.currency || 'AMD',
-          elements: tariff.elements || {},
-          energyPrice: tariff.energy_price || 0,
-          parkingFee: tariff.parking_fee || 0,
-          updatedAt: new Date()
-        }
-      });
+      await db.execute(sql`
+        INSERT INTO tariffs (id, currency, elements, energy_price, parking_fee, created_at, updated_at)
+        VALUES (${tariff.id}, ${tariff.currency || 'AMD'}, ${JSON.stringify(tariff.elements || {})}, 
+                ${tariff.energy_price || 0}, ${tariff.parking_fee || 0}, NOW(), NOW())
+        ON CONFLICT (id) DO UPDATE SET
+          currency = EXCLUDED.currency,
+          elements = EXCLUDED.elements,
+          energy_price = EXCLUDED.energy_price,
+          parking_fee = EXCLUDED.parking_fee,
+          updated_at = NOW()
+      `);
     }
 
     res.json({
@@ -330,12 +329,13 @@ app.get('/ocpi/locations', async (req, res) => {
       });
     }
 
-    const result = await db.select().from(locations).where(eq(locations.publish, true));
+    const result = await db.execute(sql`SELECT * FROM locations WHERE publish = true`);
+    const locationsData = result.rows || result;
     
     res.json({
       status_code: 1000,
       status_message: 'Success',
-      data: result.map(loc => ({
+      data: locationsData.map(loc => ({
         id: loc.id,
         name: loc.name,
         address: loc.address,
@@ -431,15 +431,12 @@ app.post('/ocpi/sessions', async (req, res) => {
 
     const session = req.body;
     
-    await db.insert(sessions).values({
-      id: session.id,
-      locationId: session.location_id,
-      startDate: new Date(session.start_date_time),
-      endDate: session.end_date_time ? new Date(session.end_date_time) : null,
-      kwh: session.kwh || 0,
-      totalCost: session.total_cost || 0,
-      status: session.status || 'ACTIVE'
-    });
+    await db.execute(sql`
+      INSERT INTO sessions (id, location_id, start_date, end_date, kwh, total_cost, status, created_at, updated_at)
+      VALUES (${session.id}, ${session.location_id}, ${new Date(session.start_date_time)}, 
+              ${session.end_date_time ? new Date(session.end_date_time) : null}, 
+              ${session.kwh || 0}, ${session.total_cost || 0}, ${session.status || 'ACTIVE'}, NOW(), NOW())
+    `);
 
     res.json({
       status_code: 1000,
