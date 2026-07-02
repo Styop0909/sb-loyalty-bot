@@ -59,8 +59,8 @@ app.get('/ocpi/details', (req, res) => {
       version: '2.2.1',
       endpoints: [
         { identifier: 'credentials', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/credentials' },
-        { identifier: 'locations', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/locations' },
-        { identifier: 'tariffs', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/tariffs' }
+        { identifier: 'locations', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/locations' },
+        { identifier: 'tariffs', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/tariffs' }
       ]
     }
   });
