@@ -65,12 +65,16 @@ app.get('/ocpi/details', (req, res) => {
       endpoints: [
         { identifier: 'credentials', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/credentials' },
         { identifier: 'locations', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/cpo/locations' },
-        { identifier: 'tariffs', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/cpo/tariffs' },
         { identifier: 'locations', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/emsp/locations' },
+        { identifier: 'tariffs', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/cpo/tariffs' },
         { identifier: 'tariffs', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/emsp/tariffs' },
-        { identifier: 'sessions', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/sessions' },
-        { identifier: 'cdrs', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/cdrs' },
-        { identifier: 'commands', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/commands' }
+        { identifier: 'sessions', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/cpo/sessions' },
+        { identifier: 'sessions', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/emsp/sessions' },
+        { identifier: 'cdrs', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/cpo/cdrs' },
+        { identifier: 'cdrs', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/emsp/cdrs' },
+        { identifier: 'commands', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/emsp/commands' },
+        { identifier: 'commands', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/cpo/commands' },
+        { identifier: 'hubclientinfo', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/hubclientinfo' }
       ]
     }
   });
