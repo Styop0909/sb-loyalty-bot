@@ -507,6 +507,515 @@ app.get('/ocpi/cpo/:id', async (req, res) => {
   }
 });
 
+app.get('/ocpi/cpo/locations', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    const result = await db.execute(sql`SELECT * FROM locations WHERE publish = true`);
+    const locationsData = result.rows || result;
+    
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: locationsData.map(loc => ({
+        id: loc.id,
+        name: loc.name,
+        address: loc.address,
+        city: loc.city,
+        country: loc.country || 'AM',
+        coordinates: {
+          latitude: parseFloat(loc.latitude) || 0,
+          longitude: parseFloat(loc.longitude) || 0
+        },
+        evses: loc.evses || []
+      }))
+    });
+  } catch (error) {
+    console.error('CPO Locations error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.get('/ocpi/cpo/tariffs', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    const result = await db.select().from(tariffs);
+    
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: result.map(t => ({
+        id: t.id,
+        currency: t.currency || 'AMD',
+        elements: t.elements || {},
+        energy_price: parseFloat(t.energyPrice) || 0,
+        parking_fee: parseFloat(t.parkingFee) || 0
+      }))
+    });
+  } catch (error) {
+    console.error('CPO Tariffs error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.post('/ocpi/cpo/sessions', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    const session = req.body;
+    console.log('📊 CPO Session received:', session);
+    
+    await db.execute(sql`
+      INSERT INTO sessions (id, location_id, start_date, end_date, kwh, total_cost, status, created_at, updated_at)
+      VALUES (${session.id}, ${session.location_id}, ${new Date(session.start_date_time)}, 
+              ${session.end_date_time ? new Date(session.end_date_time) : null}, 
+              ${session.kwh || 0}, ${session.total_cost || 0}, ${session.status || 'ACTIVE'}, NOW(), NOW())
+    `);
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: {}
+    });
+  } catch (error) {
+    console.error('CPO Sessions error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.get('/ocpi/cpo/cdrs', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: []
+    });
+  } catch (error) {
+    console.error('CPO CDRs error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.get('/ocpi/emsp/locations', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    const result = await db.execute(sql`SELECT * FROM locations WHERE publish = true`);
+    const locationsData = result.rows || result;
+    
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: locationsData.map(loc => ({
+        id: loc.id,
+        name: loc.name,
+        address: loc.address,
+        city: loc.city,
+        country: loc.country || 'AM',
+        coordinates: {
+          latitude: parseFloat(loc.latitude) || 0,
+          longitude: parseFloat(loc.longitude) || 0
+        },
+        evses: loc.evses || []
+      }))
+    });
+  } catch (error) {
+    console.error('EMSP Locations error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.get('/ocpi/emsp/tariffs', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    const result = await db.select().from(tariffs);
+    
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: result.map(t => ({
+        id: t.id,
+        currency: t.currency || 'AMD',
+        elements: t.elements || {},
+        energy_price: parseFloat(t.energyPrice) || 0,
+        parking_fee: parseFloat(t.parkingFee) || 0
+      }))
+    });
+  } catch (error) {
+    console.error('EMSP Tariffs error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.post('/ocpi/emsp/sessions', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    const session = req.body;
+    console.log('📊 EMSP Session received:', session);
+    
+    await db.execute(sql`
+      INSERT INTO sessions (id, location_id, start_date, end_date, kwh, total_cost, status, created_at, updated_at)
+      VALUES (${session.id}, ${session.location_id}, ${new Date(session.start_date_time)}, 
+              ${session.end_date_time ? new Date(session.end_date_time) : null}, 
+              ${session.kwh || 0}, ${session.total_cost || 0}, ${session.status || 'ACTIVE'}, NOW(), NOW())
+    `);
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: {}
+    });
+  } catch (error) {
+    console.error('EMSP Sessions error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.get('/ocpi/emsp/cdrs', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: []
+    });
+  } catch (error) {
+    console.error('EMSP CDRs error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.post('/ocpi/emsp/commands', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    const command = req.body;
+    console.log('📨 EMSP Command received:', command);
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: {
+        result: 'ACCEPTED',
+        timeout: 60
+      }
+    });
+  } catch (error) {
+    console.error('EMSP Commands error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.post('/ocpi/cpo/commands', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    const command = req.body;
+    console.log('📨 CPO Command received:', command);
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: {
+        result: 'ACCEPTED',
+        timeout: 60
+      }
+    });
+  } catch (error) {
+    console.error('CPO Commands error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.get('/ocpi/hubclientinfo', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const base64Token = authHeader?.replace('Token ', '');
+    let token;
+    try {
+      token = Buffer.from(base64Token, 'base64').toString('utf8');
+    } catch (e) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token encoding',
+        data: {}
+      });
+    }
+
+    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+    if (token !== OUR_TOKEN) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: 'Invalid token',
+        data: {}
+      });
+    }
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: {
+        party_id: 'AM',
+        country_code: 'AM',
+        role: 'EMSP'
+      }
+    });
+  } catch (error) {
+    console.error('HubClientInfo error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
 app.use('/ocpi', ocpiRouter);
 app.get('/', (req, res) => {
   res.send('TuTak Bot is running!');
@@ -1392,7 +1901,6 @@ bot.hears([getTranslation('hy', 'back'), getTranslation('ru', 'back'), getTransl
     [t('back')]
   ]).resize();
   
-  // Եթե user-ը շինանյութի մենյուում է
   if (ctx.session.inBuildingMaterials) {
     ctx.session.inBuildingMaterials = false;
     return ctx.reply(t('selectBuildingMaterial'), keyboard);
