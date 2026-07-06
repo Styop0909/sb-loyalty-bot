@@ -516,7 +516,7 @@ function mainMenu(lang) {
     [t('referral'), t('myOrders')],
     [t('changeCity'), t('changeLanguage')],
     [t('partners'), t('cart')],
-    [t('myStats')]
+    [t('myStats'), t('buildingMaterials')]
   ]).resize();
 }
 
@@ -1249,7 +1249,148 @@ bot.hears([getTranslation('hy', 'changeLanguage'), getTranslation('ru', 'changeL
   const t = (key, ...args) => getTranslation(user.language, key, ...args);
   ctx.reply(t('selectLanguage'), languageMenu(user.language));
 });
+bot.hears(
+  [getTranslation('hy', 'buildingMaterials'), 
+   getTranslation('ru', 'buildingMaterials'), 
+   getTranslation('en', 'buildingMaterials')], 
+  async (ctx) => {
+    const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+    const lang = user?.language || 'hy';
+    const t = (key, ...args) => getTranslation(lang, key, ...args);
+    
+    const keyboard = Markup.keyboard([
+      [t('sand'), t('gravel')],
+      [t('back')]
+    ]).resize();
+    
+    await ctx.reply(t('selectBuildingMaterial'), keyboard);
+  }
+);
+bot.hears(
+  [getTranslation('hy', 'sand'), 
+   getTranslation('ru', 'sand'), 
+   getTranslation('en', 'sand')], 
+  async (ctx) => {
+    const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+    const lang = user?.language || 'hy';
+    const t = (key, ...args) => getTranslation(lang, key, ...args);
+    
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback(t('sand_0_5'), 'sand_0_5')],
+      [Markup.button.callback(t('sand_0_8'), 'sand_0_8')],
+      [Markup.button.callback(t('sand_0_10'), 'sand_0_10')],
+      [Markup.button.callback(t('back'), 'back_to_building')]
+    ]);
+    
+    await ctx.reply(t('selectSand'), keyboard);
+  }
+);
+bot.hears(
+  [getTranslation('hy', 'gravel'), 
+   getTranslation('ru', 'gravel'), 
+   getTranslation('en', 'gravel')], 
+  async (ctx) => {
+    const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+    const lang = user?.language || 'hy';
+    const t = (key, ...args) => getTranslation(lang, key, ...args);
+    
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback(t('gravel_0_5'), 'gravel_0_5')],
+      [Markup.button.callback(t('gravel_5_19'), 'gravel_5_19')],
+      [Markup.button.callback(t('gravel_10_15'), 'gravel_10_15')],
+      [Markup.button.callback(t('back'), 'back_to_building')]
+    ]);
+    
+    await ctx.reply(t('selectGravel'), keyboard);
+  }
+);
+const buildingProducts = {
+  'sand_0_5': { name: 'Ավազ 0-5', price: 13000, category: 'sand' },
+  'sand_0_8': { name: 'Ավազ 0-8', price: 9500, category: 'sand' },
+  'sand_0_10': { name: 'Ավազ 0-10', price: 9000, category: 'sand' },
+  'gravel_0_5': { name: 'Խիճ 0-5', price: 7000, category: 'gravel' },
+  'gravel_5_19': { name: 'Խիճ 5-19', price: 7000, category: 'gravel' },
+  'gravel_10_15': { name: 'Խիճ 10-15', price: 7000, category: 'gravel' }
+};
 
+bot.action(/sand_0_5|sand_0_8|sand_0_10|gravel_0_5|gravel_5_19|gravel_10_15/, async (ctx) => {
+  try {
+    const productKey = ctx.match[0];
+    const product = buildingProducts[productKey];
+    if (!product) return;
+    
+    const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+    const lang = user?.language || 'hy';
+    const t = (key, ...args) => getTranslation(lang, key, ...args);
+    ctx.session.cart = ctx.session.cart || [];
+    const existing = ctx.session.cart.find(i => i.id === productKey);
+    if (existing) {
+      existing.quantity++;
+    } else {
+      ctx.session.cart.push({
+        id: productKey,
+        name: product.name,
+        price: product.price,
+        quantity: 1
+      });
+    }
+    
+    await ctx.answerCbQuery(`✅ ${product.name} ավելացվեց զամբյուղում (${product.price} ֏)`);
+        const cart = ctx.session.cart;
+    let total = 0;
+    let text = t('cartTitle') + '\n\n';
+    for (let item of cart) {
+      const subtotal = item.price * item.quantity;
+      total += subtotal;
+      text += `${item.name} x${item.quantity} — ${subtotal} ֏\n`;
+    }
+    text += `\n${t('cartTotal')} ${total} ֏`;
+    
+    const maxBonus = calculateBonusToUse(total, user.bonusBalance);
+    text += `\n${t('cartBonusHint', maxBonus)}`;
+    
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback(t('checkoutConfirm'), 'checkout')],
+      [Markup.button.callback(t('clearCart'), 'clear_cart')]
+    ]);
+    
+    await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+  } catch (err) {
+    console.error('Building material error:', err);
+    await ctx.answerCbQuery('Սխալ, փորձեք կրկին');
+  }
+});
+bot.action('back_to_building', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  const t = (key, ...args) => getTranslation(lang, key, ...args);
+  
+  const keyboard = Markup.keyboard([
+    [t('sand'), t('gravel')],
+    [t('back')]
+  ]).resize();
+  
+  await ctx.reply(t('selectBuildingMaterial'), keyboard);
+  await ctx.answerCbQuery();
+});
+bot.hears([getTranslation('hy', 'back'), getTranslation('ru', 'back'), getTranslation('en', 'back')], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  const t = (key, ...args) => getTranslation(lang, key, ...args);
+  
+  const keyboard = Markup.keyboard([
+    [t('sand'), t('gravel')],
+    [t('back')]
+  ]).resize();
+  
+  // Եթե user-ը շինանյութի մենյուում է
+  if (ctx.session.inBuildingMaterials) {
+    ctx.session.inBuildingMaterials = false;
+    return ctx.reply(t('selectBuildingMaterial'), keyboard);
+  }
+  
+  ctx.reply('Գլխավոր մենյու', mainMenu(user.language));
+});
 bot.hears(['Հայերեն', 'Русский', 'English'], async (ctx) => {
   ctx.session.waitingForPhone = false;
   ctx.session.waitingForBonus = false;
