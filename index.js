@@ -64,8 +64,13 @@ app.get('/ocpi/details', (req, res) => {
       version: '2.2.1',
       endpoints: [
         { identifier: 'credentials', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/credentials' },
-        { identifier: 'locations', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/locations' },
-        { identifier: 'tariffs', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/tariffs' }
+        { identifier: 'locations', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/cpo/locations' },
+        { identifier: 'tariffs', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/cpo/tariffs' },
+        { identifier: 'locations', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/emsp/locations' },
+        { identifier: 'tariffs', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/emsp/tariffs' },
+        { identifier: 'sessions', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/sessions' },
+        { identifier: 'cdrs', role: 'RECEIVER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/cdrs' },
+        { identifier: 'commands', role: 'SENDER', url: 'https://sb-loyalty-bot-production.up.railway.app/ocpi/commands' }
       ]
     }
   });
