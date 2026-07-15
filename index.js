@@ -88,7 +88,7 @@ const handleCredentials = async (req, res) => {
     
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Token ')) {
-      console.log('❌ No Authorization header');
+      console.log('No Authorization header');
       return res.status(401).json({
         status_code: 2001,
         status_message: 'Missing authorization header',
