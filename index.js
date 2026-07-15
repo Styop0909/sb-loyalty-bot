@@ -1265,6 +1265,7 @@ bot.action(/cat_(\d+)_(.+)/, async (ctx) => {
     keyboard.push([Markup.button.callback(`${name} - ${item.price} ֏`, `add_${item.id}`)]);
   }
   keyboard.push([Markup.button.callback(getTranslation(lang, 'backToCategories'), 'back_to_categories')]);
+  keyboard.push([Markup.button.callback('🛒 Զամբյուղ', 'show_cart')]); // 👈 ԱՎԵԼԱՑՆԵԼ
   
   await ctx.reply(`🍽 *${selectedCategory}*\n\n${getTranslation(lang, 'selectItem')}`, {
     parse_mode: 'Markdown',
@@ -1797,7 +1798,8 @@ bot.hears(
       [Markup.button.callback(t('sand_0_5'), 'sand_0_5')],
       [Markup.button.callback(t('sand_0_8'), 'sand_0_8')],
       [Markup.button.callback(t('sand_0_10'), 'sand_0_10')],
-      [Markup.button.callback(t('back'), 'back_to_building')]
+      [Markup.button.callback(t('back'), 'back_to_building')],
+      [Markup.button.callback('🛒 Զամբյուղ', 'show_cart')] 
     ]);
     
     await ctx.reply(t('selectSand'), keyboard);
@@ -1816,7 +1818,8 @@ bot.hears(
       [Markup.button.callback(t('gravel_0_5'), 'gravel_0_5')],
       [Markup.button.callback(t('gravel_5_19'), 'gravel_5_19')],
       [Markup.button.callback(t('gravel_10_15'), 'gravel_10_15')],
-      [Markup.button.callback(t('back'), 'back_to_building')]
+      [Markup.button.callback(t('back'), 'back_to_building')],
+      [Markup.button.callback('🛒 Զամբյուղ', 'show_cart')]
     ]);
     
     await ctx.reply(t('selectGravel'), keyboard);
