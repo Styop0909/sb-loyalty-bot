@@ -1265,7 +1265,7 @@ bot.action(/cat_(\d+)_(.+)/, async (ctx) => {
     keyboard.push([Markup.button.callback(`${name} - ${item.price} ֏`, `add_${item.id}`)]);
   }
   keyboard.push([Markup.button.callback(getTranslation(lang, 'backToCategories'), 'back_to_categories')]);
-  keyboard.push([Markup.button.callback('🛒 Զամբյուղ', 'show_cart')]); // 👈 ԱՎԵԼԱՑՆԵԼ
+  keyboard.push([Markup.button.callback('🛒 Զամբյուղ', 'show_cart')]);
   
   await ctx.reply(`🍽 *${selectedCategory}*\n\n${getTranslation(lang, 'selectItem')}`, {
     parse_mode: 'Markdown',
