@@ -1,17 +1,6 @@
+const https = require('https');
 const { db } = require('./src/db');
-const { 
-  users, 
-  orders, 
-  menuItems, 
-  bonusTransactions, 
-  partners, 
-  userBonusesByPartner,
-  locations,
-  tariffs,
-  sessions
-} = require('./src/db/schema.js');
 const { sql } = require('drizzle-orm');
-const axios = require('axios');
 require('dotenv').config();
 
 // ============================================
@@ -22,7 +11,33 @@ const FAST_TOKEN = "72CmZMK4U5XrrPaSZ0y9L8rWZlScIAL4a9F9b8PwOsxRjryxgbF3hXG1b85P
 const OUR_TOKEN = "83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45";
 const FAST_CHARGE_TOKEN = "YXzFdr66FHUEPN8qdD4u2MzDkW2AwlugT5CYFy4I1HQZUYlAg0kiFBm8XHpm9Y3sNSgfuAAi";
 const BASE_URL = "https://sb-loyalty-bot-production.up.railway.app";
-const FAST_CHARGE_URL = "https://api.fastcharge.company/v2/ocpi";
+const FAST_CHARGE_URL = "https://api.fastcharge.company";
+
+// ============================================
+// HTTPS REQUEST HELPER
+// ============================================
+
+function httpsRequest(options, data = null) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        try {
+          const json = body ? JSON.parse(body) : {};
+          resolve({ status: res.statusCode, data: json });
+        } catch (e) {
+          resolve({ status: res.statusCode, data: body });
+        }
+      });
+    });
+    req.on('error', reject);
+    if (data) {
+      req.write(JSON.stringify(data));
+    }
+    req.end();
+  });
+}
 
 // ============================================
 // 1. ՍՏՈՒԳԵԼ ՏՎՅԱԼՆԵՐԻ ԲԱԶԱՆ
@@ -32,7 +47,6 @@ async function checkDatabase() {
   console.log('\n📊 ===== DATABASE CHECK =====');
   
   try {
-    // Locations
     const locationsCount = await db.execute(sql`SELECT COUNT(*) as total FROM locations`);
     console.log(`📍 Locations: ${locationsCount.rows[0].total}`);
     
@@ -41,74 +55,72 @@ async function checkDatabase() {
     locationsData.rows.forEach(loc => {
       console.log(`   ${loc.id} | ${loc.name} | ${loc.city} | publish: ${loc.publish}`);
     });
-    
-    // Tariffs
+  } catch (error) {
+    console.log('❌ Locations error:', error.message);
+  }
+  
+  try {
     const tariffsCount = await db.execute(sql`SELECT COUNT(*) as total FROM tariffs`);
     console.log(`💰 Tariffs: ${tariffsCount.rows[0].total}`);
-    
-    const tariffsData = await db.execute(sql`SELECT id, currency, energy_price FROM tariffs`);
-    console.log('📋 Tariffs list:');
-    tariffsData.rows.forEach(t => {
-      console.log(`   ${t.id} | ${t.currency} | ${t.energy_price}`);
-    });
-    
-    // Sessions
+  } catch (error) {
+    console.log('❌ Tariffs error:', error.message);
+  }
+  
+  try {
     const sessionsCount = await db.execute(sql`SELECT COUNT(*) as total FROM sessions`);
     console.log(`📊 Sessions: ${sessionsCount.rows[0].total}`);
-    
   } catch (error) {
-    console.error('❌ Database error:', error.message);
+    console.log('❌ Sessions error:', error.message);
   }
 }
 
 // ============================================
-// 2. ՍՏՈՒԳԵԼ ՁԵՐ ՍԵՐՎԵՐԸ
+// 2. HTTPS REQUEST WRAPPER
+// ============================================
+
+function request(url, method = 'GET', headers = {}, body = null) {
+  const urlObj = new URL(url);
+  const options = {
+    hostname: urlObj.hostname,
+    port: urlObj.port || 443,
+    path: urlObj.pathname + urlObj.search,
+    method: method,
+    headers: headers
+  };
+  return httpsRequest(options, body);
+}
+
+// ============================================
+// 3. ՍՏՈՒԳԵԼ ՁԵՐ ՍԵՐՎԵՐԸ
 // ============================================
 
 async function checkOurServer() {
   console.log('\n🖥️ ===== OUR SERVER CHECK =====');
   
-  try {
-    // /versions
-    const versions = await axios.get(`${BASE_URL}/ocpi/versions`);
-    console.log(`✅ /versions: ${versions.data.status_code}`);
-  } catch (error) {
-    console.log(`❌ /versions: ${error.response?.status || 'ERROR'}`);
-  }
+  // /versions
+  const versions = await request(`${BASE_URL}/ocpi/versions`);
+  console.log(`✅ /versions: ${versions.status}`);
   
-  try {
-    // /details
-    const details = await axios.get(`${BASE_URL}/ocpi/details`);
-    console.log(`✅ /details: ${details.data.status_code}`);
-  } catch (error) {
-    console.log(`❌ /details: ${error.response?.status || 'ERROR'}`);
-  }
+  // /details
+  const details = await request(`${BASE_URL}/ocpi/details`);
+  console.log(`✅ /details: ${details.status}`);
   
-  try {
-    // /locations
-    const headers = {
-      'Authorization': `Token ${Buffer.from(OUR_TOKEN).toString('base64')}`
-    };
-    const locations = await axios.get(`${BASE_URL}/ocpi/locations`, { headers });
-    console.log(`✅ /locations: ${locations.data.status_code} (${locations.data.data?.length || 0} locations)`);
-  } catch (error) {
-    console.log(`❌ /locations: ${error.response?.status || 'ERROR'}`);
-  }
+  // /locations (with token)
+  const base64Our = Buffer.from(OUR_TOKEN).toString('base64');
+  const locations = await request(`${BASE_URL}/ocpi/locations`, 'GET', {
+    'Authorization': `Token ${base64Our}`
+  });
+  console.log(`✅ /locations: ${locations.status} (${locations.data?.data?.length || 0} locations)`);
   
-  try {
-    // /tariffs
-    const headers = {
-      'Authorization': `Token ${Buffer.from(OUR_TOKEN).toString('base64')}`
-    };
-    const tariffs = await axios.get(`${BASE_URL}/ocpi/tariffs`, { headers });
-    console.log(`✅ /tariffs: ${tariffs.data.status_code} (${tariffs.data.data?.length || 0} tariffs)`);
-  } catch (error) {
-    console.log(`❌ /tariffs: ${error.response?.status || 'ERROR'}`);
-  }
+  // /tariffs (with token)
+  const tariffs = await request(`${BASE_URL}/ocpi/tariffs`, 'GET', {
+    'Authorization': `Token ${base64Our}`
+  });
+  console.log(`✅ /tariffs: ${tariffs.status} (${tariffs.data?.data?.length || 0} tariffs)`);
 }
 
 // ============================================
-// 3. ՍՏՈՒԳԵԼ FAST CHARGE-Ի ՀԱՍԱՆԵԼԻՈՒԹՅՈՒՆԸ
+// 4. ՍՏՈՒԳԵԼ FAST CHARGE-Ի ՍԵՐՎԵՐԸ
 // ============================================
 
 async function checkFastCharge() {
@@ -118,54 +130,39 @@ async function checkFastCharge() {
   const base64Our = Buffer.from(OUR_TOKEN).toString('base64');
   const base64FastCharge = Buffer.from(FAST_CHARGE_TOKEN).toString('base64');
   
-  // 1. GET /versions (PRE_TOKEN)
-  try {
-    const headers = { 'Authorization': `Token ${base64Fast}` };
-    const versions = await axios.get(`${FAST_CHARGE_URL}/versions`, { headers });
-    console.log(`✅ /versions (PRE_TOKEN): ${versions.data.status_code}`);
-  } catch (error) {
-    console.log(`❌ /versions (PRE_TOKEN): ${error.response?.status || 'ERROR'}`);
-  }
+  // /versions (PRE_TOKEN)
+  const versions = await request(`${FAST_CHARGE_URL}/v2/ocpi/versions`, 'GET', {
+    'Authorization': `Token ${base64Fast}`
+  });
+  console.log(`✅ /versions (PRE_TOKEN): ${versions.status}`);
   
-  // 2. GET /details (PRE_TOKEN)
-  try {
-    const headers = { 'Authorization': `Token ${base64Fast}` };
-    const details = await axios.get(`${FAST_CHARGE_URL}/2.2.1/details`, { headers });
-    console.log(`✅ /details (PRE_TOKEN): ${details.data.status_code}`);
-  } catch (error) {
-    console.log(`❌ /details (PRE_TOKEN): ${error.response?.status || 'ERROR'}`);
-  }
+  // /details (PRE_TOKEN)
+  const details = await request(`${FAST_CHARGE_URL}/v2/ocpi/2.2.1/details`, 'GET', {
+    'Authorization': `Token ${base64Fast}`
+  });
+  console.log(`✅ /details (PRE_TOKEN): ${details.status}`);
   
-  // 3. GET /cpo/locations (OUR_TOKEN)
-  try {
-    const headers = { 'Authorization': `Token ${base64Our}` };
-    const locations = await axios.get(`${FAST_CHARGE_URL}/2.2.1/cpo/locations`, { headers });
-    console.log(`✅ /cpo/locations (OUR_TOKEN): ${locations.data.status_code} (${locations.data.data?.length || 0} locations)`);
-  } catch (error) {
-    console.log(`❌ /cpo/locations (OUR_TOKEN): ${error.response?.status || 'ERROR'}`);
-  }
+  // /cpo/locations (OUR_TOKEN)
+  const locations1 = await request(`${FAST_CHARGE_URL}/v2/ocpi/2.2.1/cpo/locations`, 'GET', {
+    'Authorization': `Token ${base64Our}`
+  });
+  console.log(`✅ /cpo/locations (OUR_TOKEN): ${locations1.status} (${locations1.data?.data?.length || 0} locations)`);
   
-  // 4. GET /cpo/locations (FAST_CHARGE_TOKEN)
-  try {
-    const headers = { 'Authorization': `Token ${base64FastCharge}` };
-    const locations = await axios.get(`${FAST_CHARGE_URL}/2.2.1/cpo/locations`, { headers });
-    console.log(`✅ /cpo/locations (FAST_CHARGE_TOKEN): ${locations.data.status_code} (${locations.data.data?.length || 0} locations)`);
-  } catch (error) {
-    console.log(`❌ /cpo/locations (FAST_CHARGE_TOKEN): ${error.response?.status || 'ERROR'}`);
-  }
+  // /cpo/locations (FAST_CHARGE_TOKEN)
+  const locations2 = await request(`${FAST_CHARGE_URL}/v2/ocpi/2.2.1/cpo/locations`, 'GET', {
+    'Authorization': `Token ${base64FastCharge}`
+  });
+  console.log(`✅ /cpo/locations (FAST_CHARGE_TOKEN): ${locations2.status} (${locations2.data?.data?.length || 0} locations)`);
   
-  // 5. GET /cpo/tariffs (OUR_TOKEN)
-  try {
-    const headers = { 'Authorization': `Token ${base64Our}` };
-    const tariffs = await axios.get(`${FAST_CHARGE_URL}/2.2.1/cpo/tariffs`, { headers });
-    console.log(`✅ /cpo/tariffs (OUR_TOKEN): ${tariffs.data.status_code} (${tariffs.data.data?.length || 0} tariffs)`);
-  } catch (error) {
-    console.log(`❌ /cpo/tariffs (OUR_TOKEN): ${error.response?.status || 'ERROR'}`);
-  }
+  // /cpo/tariffs (OUR_TOKEN)
+  const tariffs = await request(`${FAST_CHARGE_URL}/v2/ocpi/2.2.1/cpo/tariffs`, 'GET', {
+    'Authorization': `Token ${base64Our}`
+  });
+  console.log(`✅ /cpo/tariffs (OUR_TOKEN): ${tariffs.status} (${tariffs.data?.data?.length || 0} tariffs)`);
 }
 
 // ============================================
-// 4. ՍՏՈՒԳԵԼ FAST CHARGE-Ի POST /CREDENTIALS
+// 5. CREDENTIALS CHECK
 // ============================================
 
 async function checkCredentials() {
@@ -173,27 +170,25 @@ async function checkCredentials() {
   
   const base64Fast = Buffer.from(FAST_TOKEN).toString('base64');
   
-  try {
-    const headers = {
-      'Authorization': `Token ${base64Fast}`,
-      'Content-Type': 'application/json'
-    };
-    const body = {
-      token: FAST_TOKEN,
-      url: `${BASE_URL}/ocpi/versions`
-    };
-    const response = await axios.post(`${FAST_CHARGE_URL}/2.2.1/credentials`, body, { headers });
-    console.log(`✅ POST /credentials: ${response.data.status_code}`);
-    console.log(`   Token: ${response.data.data?.token}`);
-    console.log(`   URL: ${response.data.data?.url}`);
-  } catch (error) {
-    console.log(`❌ POST /credentials: ${error.response?.status || 'ERROR'}`);
-    console.log(`   ${error.response?.data?.status_message || 'No message'}`);
+  const headers = {
+    'Authorization': `Token ${base64Fast}`,
+    'Content-Type': 'application/json'
+  };
+  const body = {
+    token: FAST_TOKEN,
+    url: `${BASE_URL}/ocpi/versions`
+  };
+  
+  const response = await request(`${FAST_CHARGE_URL}/v2/ocpi/2.2.1/credentials`, 'POST', headers, body);
+  console.log(`✅ POST /credentials: ${response.status}`);
+  if (response.status === 1000 || response.status === 200) {
+    console.log(`   Token: ${response.data?.data?.token}`);
+    console.log(`   URL: ${response.data?.data?.url}`);
   }
 }
 
 // ============================================
-// 5. RUN ALL
+// 6. RUN ALL
 // ============================================
 
 async function runDiagnostic() {
@@ -201,8 +196,6 @@ async function runDiagnostic() {
   console.log('🔍   TUṬAK OCPI DIAGNOSTIC TOOL');
   console.log('🔍 ==========================================');
   console.log(`📅 Time: ${new Date().toISOString()}`);
-  console.log(`🏠 Our URL: ${BASE_URL}`);
-  console.log(`🔌 Fast Charge URL: ${FAST_CHARGE_URL}`);
   
   await checkDatabase();
   await checkOurServer();
