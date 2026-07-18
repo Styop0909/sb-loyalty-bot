@@ -37,6 +37,7 @@ const {
   deletePartner
 } = require('./admin');
 
+const FAST_CHARGE_TOKEN = 'YXzFdr66FHUEPN8qdD4u2MzDkW2AwlugT5CYFy4I1HQZUYlAg0kiFBm8XHpm9Y3sNSgfuAAi';
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 8080;
@@ -509,49 +510,93 @@ app.get('/ocpi/cpo/:id', async (req, res) => {
 
 app.get('/ocpi/cpo/locations', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
-        data: {}
-      });
-    }
-
-    const result = await db.execute(sql`SELECT * FROM locations WHERE publish = true`);
-    const locationsData = result.rows || result;
+    const base64Token = Buffer.from(FAST_CHARGE_TOKEN).toString('base64');
     
-    res.json({
-      status_code: 1000,
-      status_message: 'Success',
-      data: locationsData.map(loc => ({
-        id: loc.id,
-        name: loc.name,
-        address: loc.address,
-        city: loc.city,
-        country: loc.country || 'AM',
-        coordinates: {
-          latitude: parseFloat(loc.latitude) || 0,
-          longitude: parseFloat(loc.longitude) || 0
-        },
-        evses: loc.evses || []
-      }))
+    const https = require('https');
+    const options = {
+      hostname: 'api.fastcharge.company',
+      path: '/v2/ocpi/2.2.1/cpo/locations',
+      method: 'GET',
+      headers: {
+        'Authorization': `Token ${base64Token}`
+      }
+    };
+
+    const request = https.request(options, (response) => {
+      let data = '';
+      response.on('data', (chunk) => data += chunk);
+      response.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.status_code === 1000) {
+            for (const location of json.data) {
+              const hasOnlineConnector = location.evses?.some(evse => 
+                evse.connectors?.some(conn => conn.status === 'online')
+              ) || false;
+              
+              db.execute(sql`
+                INSERT INTO locations (id, name, address, city, country, latitude, longitude, evses, publish, is_online, updated_at)
+                VALUES (${location.id}, ${location.name}, ${location.address}, ${location.city}, ${location.country}, 
+                        ${location.coordinates.latitude}, ${location.coordinates.longitude}, 
+                        ${JSON.stringify(location.evses || [])}, ${location.publish !== false}, ${hasOnlineConnector}, NOW())
+                ON CONFLICT (id) DO UPDATE SET
+                  name = EXCLUDED.name,
+                  address = EXCLUDED.address,
+                  city = EXCLUDED.city,
+                  country = EXCLUDED.country,
+                  latitude = EXCLUDED.latitude,
+                  longitude = EXCLUDED.longitude,
+                  evses = EXCLUDED.evses,
+                  publish = EXCLUDED.publish,
+                  is_online = EXCLUDED.is_online,
+                  updated_at = NOW()
+              `);
+            }
+            res.json({
+              status_code: 1000,
+              status_message: 'Success',
+              data: json.data.map(loc => ({
+                id: loc.id,
+                name: loc.name,
+                address: loc.address,
+                city: loc.city,
+                country: loc.country || 'AM',
+                coordinates: {
+                  latitude: parseFloat(loc.coordinates.latitude) || 0,
+                  longitude: parseFloat(loc.coordinates.longitude) || 0
+                },
+                evses: loc.evses || []
+              }))
+            });
+          } else {
+            res.status(500).json({
+              status_code: 3000,
+              status_message: 'Fast Charge error: ' + json.status_message,
+              data: {}
+            });
+          }
+        } catch (e) {
+          res.status(500).json({
+            status_code: 3000,
+            status_message: 'Invalid response from Fast Charge',
+            data: {}
+          });
+        }
+      });
     });
+
+    request.on('error', (error) => {
+      console.error('❌ Fast Charge request error:', error);
+      res.status(500).json({
+        status_code: 3000,
+        status_message: 'Error connecting to Fast Charge',
+        data: {}
+      });
+    });
+
+    request.end();
   } catch (error) {
-    console.error('CPO Locations error:', error);
+    console.error('❌ CPO Locations error:', error);
     res.status(500).json({
       status_code: 3000,
       status_message: 'Internal server error: ' + error.message,
@@ -1034,7 +1079,8 @@ function mainMenu(lang) {
     [t('referral'), t('myOrders')],
     [t('changeCity'), t('changeLanguage')],
     [t('partners'), t('cart')],
-    [t('myStats'), t('buildingMaterials')]
+    [t('myStats'), t('buildingMaterials')],
+    [t('stations')]
   ]).resize();
 }
 
@@ -1911,6 +1957,32 @@ bot.hears([getTranslation('hy', 'back'), getTranslation('ru', 'back'), getTransl
   
   ctx.reply('Գլխավոր մենյու', mainMenu(user.language));
 });
+bot.hears(
+  [getTranslation('hy', 'stations'), 
+   getTranslation('ru', 'stations'), 
+   getTranslation('en', 'stations')], 
+  async (ctx) => {
+    const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+    const lang = user?.language || 'hy';
+    
+    const locationsData = await db.execute(sql`SELECT * FROM locations WHERE publish = true`);
+    const locations = locationsData.rows || locationsData;
+    
+    if (locations.length === 0) {
+      return ctx.reply('📭 Կայաններ դեռ չկան');
+    }
+    
+    let text = '🔌 *Մատչելի կայաններ:*\n\n';
+    for (const loc of locations) {
+      text += `*${loc.name}*\n`;
+      text += `📍 ${loc.address || 'Հասցեն նշված չէ'}\n`;
+      text += `🏙️ ${loc.city || 'Քաղաքը նշված չէ'}\n`;
+      text += `🔌 ${loc.evses?.length || 0} միացում\n\n`;
+    }
+    
+    ctx.reply(text, { parse_mode: 'Markdown' });
+  }
+);
 bot.hears(['Հայերեն', 'Русский', 'English'], async (ctx) => {
   ctx.session.waitingForPhone = false;
   ctx.session.waitingForBonus = false;
