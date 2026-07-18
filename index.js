@@ -1301,6 +1301,38 @@ bot.hears([getTranslation('hy', 'partners'), getTranslation('ru', 'partners'), g
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
   
+  const keyboard = Markup.keyboard([
+    ['⚡ FastCharge', '🏢 Մյուս գործընկերներ'],
+    [getTranslation(lang, 'back')]
+  ]).resize();
+  
+  await ctx.reply('🏢 *Ընտրեք գործընկեր:*', {
+    parse_mode: 'Markdown',
+    ...keyboard
+  });
+});
+
+bot.hears(['⚡ FastCharge'], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  const t = (key, ...args) => getTranslation(lang, key, ...args);
+  
+  const keyboard = Markup.keyboard([
+    [t('locations'), t('tariffs')],
+    [t('sessions'), t('cdrs')],
+    [t('back')]
+  ]).resize();
+  
+  await ctx.reply('⚡ *FastCharge - Ընտրեք բաժինը:*', {
+    parse_mode: 'Markdown',
+    ...keyboard
+  });
+});
+
+bot.hears(['🏢 Մյուս գործընկերներ'], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
   const partnersList = await db.select().from(partners).where(eq(partners.isActive, true));
   
   if (partnersList.length === 0) {
@@ -1319,7 +1351,8 @@ bot.hears([getTranslation('hy', 'partners'), getTranslation('ru', 'partners'), g
     text += getTranslation(lang, 'partnersBonus', p.commission) + '\n\n';
   }
   
-  ctx.reply(text, { parse_mode: 'Markdown' });
+  const keyboard = Markup.keyboard([[getTranslation(lang, 'back')]]).resize();
+  await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
 });
 
 bot.hears([getTranslation('hy', 'menu'), getTranslation('ru', 'menu'), getTranslation('en', 'menu')], async (ctx) => {
