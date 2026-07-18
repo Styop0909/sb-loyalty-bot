@@ -1163,8 +1163,7 @@ function mainMenu(lang) {
     [t('referral'), t('myOrders')],
     [t('changeCity'), t('changeLanguage')],
     [t('partners'), t('cart')],
-    [t('myStats'), t('buildingMaterials')],
-    [t('stations')]
+    [t('myStats'), t('buildingMaterials')]
   ]).resize();
 }
 
@@ -2049,9 +2048,28 @@ bot.hears([getTranslation('hy', 'back'), getTranslation('ru', 'back'), getTransl
 });
 
 bot.hears(
-  [getTranslation('hy', 'stations'), 
-   getTranslation('ru', 'stations'), 
-   getTranslation('en', 'stations')], 
+  [getTranslation('hy', 'fastcharge'), 
+   getTranslation('ru', 'fastcharge'), 
+   getTranslation('en', 'fastcharge')], 
+  async (ctx) => {
+    const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+    const lang = user?.language || 'hy';
+    const t = (key, ...args) => getTranslation(lang, key, ...args);
+    
+    const keyboard = Markup.keyboard([
+      [t('locations'), t('tariffs')],
+      [t('sessions'), t('cdrs')],
+      [t('back')]
+    ]).resize();
+    
+    await ctx.reply('🏢 *FastCharge*', keyboard);
+  }
+);
+
+bot.hears(
+  [getTranslation('hy', 'locations'), 
+   getTranslation('ru', 'locations'), 
+   getTranslation('en', 'locations')], 
   async (ctx) => {
     const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
     const lang = user?.language || 'hy';
@@ -2063,12 +2081,96 @@ bot.hears(
       return ctx.reply('📭 Կայաններ դեռ չկան');
     }
     
-    let text = '🔌 *Մատչելի կայաններ:*\n\n';
+    let text = '🔌 *FastCharge կայաններ:*\n\n';
     for (const loc of locations) {
       text += `*${loc.name}*\n`;
       text += `📍 ${loc.address || 'Հասցեն նշված չէ'}\n`;
       text += `🏙️ ${loc.city || 'Քաղաքը նշված չէ'}\n`;
       text += `🔌 ${loc.evses?.length || 0} միացում\n\n`;
+    }
+    
+    ctx.reply(text, { parse_mode: 'Markdown' });
+  }
+);
+
+bot.hears(
+  [getTranslation('hy', 'tariffs'), 
+   getTranslation('ru', 'tariffs'), 
+   getTranslation('en', 'tariffs')], 
+  async (ctx) => {
+    const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+    const lang = user?.language || 'hy';
+    
+    const tariffsData = await db.select().from(tariffs);
+    const tariffs = tariffsData || [];
+    
+    if (tariffs.length === 0) {
+      return ctx.reply('💰 Տարիֆներ դեռ չկան');
+    }
+    
+    let text = '💰 *FastCharge տարիֆներ:*\n\n';
+    for (const t of tariffs) {
+      text += `*${t.id}*\n`;
+      text += `💵 ${t.currency || 'AMD'} — ${t.energy_price || 0} / kWh\n`;
+      text += `🅿️ ${t.parking_fee || 0} ${t.currency || 'AMD'}\n\n`;
+    }
+    
+    ctx.reply(text, { parse_mode: 'Markdown' });
+  }
+);
+
+bot.hears(
+  [getTranslation('hy', 'sessions'), 
+   getTranslation('ru', 'sessions'), 
+   getTranslation('en', 'sessions')], 
+  async (ctx) => {
+    const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+    const lang = user?.language || 'hy';
+    
+    const sessionsData = await db.select().from(sessions).orderBy(desc(sessions.createdAt)).limit(20);
+    const sessions = sessionsData || [];
+    
+    if (sessions.length === 0) {
+      return ctx.reply('📊 Սեսիաներ դեռ չկան');
+    }
+    
+    let text = '📊 *FastCharge սեսիաներ:*\n\n';
+    for (const s of sessions) {
+      text += `🆔 ${s.id}\n`;
+      text += `📍 ${s.locationId || 'N/A'}\n`;
+      text += `📅 ${s.startDate ? new Date(s.startDate).toLocaleString() : 'N/A'}\n`;
+      text += `⚡ ${s.kwh || 0} kWh\n`;
+      text += `💵 ${s.totalCost || 0} AMD\n`;
+      text += `📌 ${s.status || 'N/A'}\n\n`;
+    }
+    
+    ctx.reply(text, { parse_mode: 'Markdown' });
+  }
+);
+
+bot.hears(
+  [getTranslation('hy', 'cdrs'), 
+   getTranslation('ru', 'cdrs'), 
+   getTranslation('en', 'cdrs')], 
+  async (ctx) => {
+    const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+    const lang = user?.language || 'hy';
+    
+    // CDRs աղյուսակ չկա, ցույց տալ sessions-ը որպես օրինակ
+    const sessionsData = await db.select().from(sessions).orderBy(desc(sessions.createdAt)).limit(20);
+    const sessions = sessionsData || [];
+    
+    if (sessions.length === 0) {
+      return ctx.reply('📄 CDRs դեռ չկան');
+    }
+    
+    let text = '📄 *FastCharge CDRs:*\n\n';
+    for (const s of sessions) {
+      text += `🆔 ${s.id}\n`;
+      text += `📍 ${s.locationId || 'N/A'}\n`;
+      text += `📅 ${s.startDate ? new Date(s.startDate).toLocaleString() : 'N/A'}\n`;
+      text += `⚡ ${s.kwh || 0} kWh\n`;
+      text += `💵 ${s.totalCost || 0} AMD\n\n`;
     }
     
     ctx.reply(text, { parse_mode: 'Markdown' });
