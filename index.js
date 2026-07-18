@@ -510,8 +510,7 @@ app.get('/ocpi/cpo/:id', async (req, res) => {
 
 app.get('/ocpi/cpo/locations', async (req, res) => {
   try {
-    // ✅ ՕԳՏԱԳՈՐԾԵԼ FAST CHARGE-Ի TOKEN-Ը
-    const base64Token = Buffer.from(FAST_CHARGE_TOKEN).toString('base64');
+    const base64Token = FAST_CHARGE_BASE64;
     
     const https = require('https');
     const options = {
@@ -530,7 +529,6 @@ app.get('/ocpi/cpo/locations', async (req, res) => {
         try {
           const json = JSON.parse(data);
           if (json.status_code === 1000) {
-            // Պահպանել DB-ում
             for (const location of json.data) {
               const hasOnlineConnector = location.evses?.some(evse => 
                 evse.connectors?.some(conn => conn.status === 'online')
@@ -539,7 +537,7 @@ app.get('/ocpi/cpo/locations', async (req, res) => {
               await db.execute(sql`
                 INSERT INTO locations (id, name, address, city, country, latitude, longitude, evses, publish, is_online, updated_at)
                 VALUES (${location.id}, ${location.name}, ${location.address}, ${location.city}, ${location.country}, 
-                        ${location.coordinates.latitude}, ${location.coordinates.longitude}, 
+                        ${parseFloat(location.coordinates.latitude) || 0}, ${parseFloat(location.coordinates.longitude) || 0}, 
                         ${JSON.stringify(location.evses || [])}, ${location.publish !== false}, ${hasOnlineConnector}, NOW())
                 ON CONFLICT (id) DO UPDATE SET
                   name = EXCLUDED.name,
@@ -1816,6 +1814,7 @@ bot.hears([getTranslation('hy', 'changeLanguage'), getTranslation('ru', 'changeL
   const t = (key, ...args) => getTranslation(user.language, key, ...args);
   ctx.reply(t('selectLanguage'), languageMenu(user.language));
 });
+
 bot.hears(
   [getTranslation('hy', 'buildingMaterials'), 
    getTranslation('ru', 'buildingMaterials'), 
@@ -1833,6 +1832,7 @@ bot.hears(
     await ctx.reply(t('selectBuildingMaterial'), keyboard);
   }
 );
+
 bot.hears(
   [getTranslation('hy', 'sand'), 
    getTranslation('ru', 'sand'), 
@@ -1853,6 +1853,7 @@ bot.hears(
     await ctx.reply(t('selectSand'), keyboard);
   }
 );
+
 bot.hears(
   [getTranslation('hy', 'gravel'), 
    getTranslation('ru', 'gravel'), 
@@ -1873,6 +1874,7 @@ bot.hears(
     await ctx.reply(t('selectGravel'), keyboard);
   }
 );
+
 const buildingProducts = {
   'sand_0_5': { name: 'Ավազ 0-5', price: 13000, category: 'sand' },
   'sand_0_8': { name: 'Ավազ 0-8', price: 9500, category: 'sand' },
@@ -1929,6 +1931,7 @@ bot.action(/sand_0_5|sand_0_8|sand_0_10|gravel_0_5|gravel_5_19|gravel_10_15/, as
     await ctx.answerCbQuery('Սխալ, փորձեք կրկին');
   }
 });
+
 bot.action('back_to_building', async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
@@ -1942,6 +1945,7 @@ bot.action('back_to_building', async (ctx) => {
   await ctx.reply(t('selectBuildingMaterial'), keyboard);
   await ctx.answerCbQuery();
 });
+
 bot.hears([getTranslation('hy', 'back'), getTranslation('ru', 'back'), getTranslation('en', 'back')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
@@ -1959,6 +1963,7 @@ bot.hears([getTranslation('hy', 'back'), getTranslation('ru', 'back'), getTransl
   
   ctx.reply('Գլխավոր մենյու', mainMenu(user.language));
 });
+
 bot.hears(
   [getTranslation('hy', 'stations'), 
    getTranslation('ru', 'stations'), 
@@ -1985,6 +1990,7 @@ bot.hears(
     ctx.reply(text, { parse_mode: 'Markdown' });
   }
 );
+
 bot.hears(['Հայերեն', 'Русский', 'English'], async (ctx) => {
   ctx.session.waitingForPhone = false;
   ctx.session.waitingForBonus = false;
