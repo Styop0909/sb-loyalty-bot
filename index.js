@@ -510,6 +510,7 @@ app.get('/ocpi/cpo/:id', async (req, res) => {
 
 app.get('/ocpi/cpo/locations', async (req, res) => {
   try {
+    // ✅ ՕԳՏԱԳՈՐԾԵԼ FAST CHARGE-Ի TOKEN-Ը
     const base64Token = Buffer.from(FAST_CHARGE_TOKEN).toString('base64');
     
     const https = require('https');
@@ -525,16 +526,17 @@ app.get('/ocpi/cpo/locations', async (req, res) => {
     const request = https.request(options, (response) => {
       let data = '';
       response.on('data', (chunk) => data += chunk);
-      response.on('end', () => {
+      response.on('end', async () => {
         try {
           const json = JSON.parse(data);
           if (json.status_code === 1000) {
+            // Պահպանել DB-ում
             for (const location of json.data) {
               const hasOnlineConnector = location.evses?.some(evse => 
                 evse.connectors?.some(conn => conn.status === 'online')
               ) || false;
               
-              db.execute(sql`
+              await db.execute(sql`
                 INSERT INTO locations (id, name, address, city, country, latitude, longitude, evses, publish, is_online, updated_at)
                 VALUES (${location.id}, ${location.name}, ${location.address}, ${location.city}, ${location.country}, 
                         ${location.coordinates.latitude}, ${location.coordinates.longitude}, 
