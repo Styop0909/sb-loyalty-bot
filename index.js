@@ -39,6 +39,7 @@ const {
 
 const express = require('express');
 const app = express();
+const cron = require('node-cron');
 const port = process.env.PORT || 8080;
 const QRCode = require('qrcode');
 app.use(express.json());
@@ -1059,7 +1060,85 @@ app.get('/ocpi/hubclientinfo', async (req, res) => {
     });
   }
 });
+const FAST_CHARGE_BASE64 = 'WVh6RmRyNjZGSFVFUE44cWRENHUyTXpEa1cyQXdsdWdUNUNZRnk0STFIUVpVWWxBZzBraUZCbThYSHBtdnRWQg==';
+async function syncLocations() {
+  try {
+    console.log('🔄 Syncing locations from Fast Charge...');
+    
+    const https = require('https');
+    const options = {
+      hostname: 'api.fastcharge.company',
+      path: '/v2/ocpi/2.2.1/cpo/locations',
+      method: 'GET',
+      headers: {
+        'Authorization': `Token ${FAST_CHARGE_BASE64}`
+      }
+    };
 
+    return new Promise((resolve, reject) => {
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', async () => {
+          try {
+            const json = JSON.parse(data);
+            if (json.status_code === 1000) {
+              console.log(`📍 Received ${json.data.length} locations`);
+              
+              for (const loc of json.data) {
+                const lat = parseFloat(loc.coordinates.latitude) || 0;
+                const lng = parseFloat(loc.coordinates.longitude) || 0;
+                const isOnline = loc.evses?.some(e => e.connectors?.some(c => c.status === 'online')) || false;
+                
+                await db.execute(sql`
+                  INSERT INTO locations (id, name, address, city, country, latitude, longitude, evses, publish, is_online, updated_at)
+                  VALUES (${loc.id}, ${loc.name}, ${loc.address}, ${loc.city}, ${loc.country.slice(0, 2)},
+                          ${lat}, ${lng},
+                          ${JSON.stringify(loc.evses || [])}, ${loc.publish !== false}, ${isOnline}, NOW())
+                  ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    address = EXCLUDED.address,
+                    city = EXCLUDED.city,
+                    country = EXCLUDED.country,
+                    latitude = EXCLUDED.latitude,
+                    longitude = EXCLUDED.longitude,
+                    evses = EXCLUDED.evses,
+                    publish = EXCLUDED.publish,
+                    is_online = EXCLUDED.is_online,
+                    updated_at = NOW()
+                `);
+              }
+              
+              console.log('✅ Locations synced successfully');
+              resolve(json.data);
+            } else {
+              console.error('❌ Fast Charge error:', json.status_message);
+              reject(new Error(json.status_message));
+            }
+          } catch (e) {
+            console.error('❌ Parse error:', e.message);
+            reject(e);
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        console.error('❌ Request error:', e.message);
+        reject(e);
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('❌ Sync error:', error.message);
+  }
+}
+
+cron.schedule('*/10 * * * *', () => {
+  syncLocations().catch(console.error);
+});
+
+syncLocations().catch(console.error);
 app.use('/ocpi', ocpiRouter);
 app.get('/', (req, res) => {
   res.send('TuTak Bot is running!');
