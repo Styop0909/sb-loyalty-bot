@@ -1135,11 +1135,15 @@ async function syncLocations() {
   }
 }
 
+// Run immediately on startup (after server is ready)
+setTimeout(() => {
+  syncLocations().catch(console.error);
+}, 5000);
+
+// Then every 10 minutes
 setInterval(() => {
   syncLocations().catch(console.error);
 }, 10 * 60 * 1000);
-
-syncLocations().catch(console.error);
 
 app.use('/ocpi', ocpiRouter);
 app.get('/', (req, res) => {
