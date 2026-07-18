@@ -37,7 +37,7 @@ const {
   deletePartner
 } = require('./admin');
 
-const FAST_CHARGE_TOKEN = 'YXzFdr66FHUEPN8qdD4u2MzDkW2AwlugT5CYFy4I1HQZUYlAg0kiFBm8XHpm9Y3sNSgfuAAi';
+const FAST_CHARGE_BASE64 = 'WVh6RmRyNjZGSFVFUE44cWRENHUyTXpEa1cyQXdsdWdUNUNZRnk0STFIUVpVWWxBZzBraUZCbThYSHBtdnRWQg==';
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 8080;
