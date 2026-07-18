@@ -37,7 +37,6 @@ const {
   deletePartner
 } = require('./admin');
 
-const FAST_CHARGE_BASE64 = 'WVh6RmRyNjZGSFVFUE44cWRENHUyTXpEa1cyQXdsdWdUNUNZRnk0STFIUVpVWWxBZzBraUZCbThYSHBtdnRWQg==';
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 8080;
@@ -510,7 +509,7 @@ app.get('/ocpi/cpo/:id', async (req, res) => {
 
 app.get('/ocpi/cpo/locations', async (req, res) => {
   try {
-    const base64Token = FAST_CHARGE_BASE64;
+    const base64Token = 'WVh6RmRyNjZGSFVFUE44cWRENHUyTXpEa1cyQXdsdWdUNUNZRnk0STFIUVpVWWxBZzBraUZCbThYSHBtdnRWQg==';
     
     const https = require('https');
     const options = {
