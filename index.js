@@ -39,7 +39,6 @@ const {
 
 const express = require('express');
 const app = express();
-const cron = require('node-cron');
 const port = process.env.PORT || 8080;
 const QRCode = require('qrcode');
 app.use(express.json());
@@ -1060,7 +1059,9 @@ app.get('/ocpi/hubclientinfo', async (req, res) => {
     });
   }
 });
+
 const FAST_CHARGE_BASE64 = 'WVh6RmRyNjZGSFVFUE44cWRENHUyTXpEa1cyQXdsdWdUNUNZRnk0STFIUVpVWWxBZzBraUZCbThYSHBtdnRWQg==';
+
 async function syncLocations() {
   try {
     console.log('🔄 Syncing locations from Fast Charge...');
@@ -1134,11 +1135,12 @@ async function syncLocations() {
   }
 }
 
-cron.schedule('*/10 * * * *', () => {
+setInterval(() => {
   syncLocations().catch(console.error);
-});
+}, 10 * 60 * 1000);
 
 syncLocations().catch(console.error);
+
 app.use('/ocpi', ocpiRouter);
 app.get('/', (req, res) => {
   res.send('TuTak Bot is running!');
