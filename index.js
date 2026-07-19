@@ -590,16 +590,24 @@ app.post('/ocpi/cpo/sessions', async (req, res) => {
         data: {}
       });
     }
-
     const sessionData = req.body;
-    console.log('📊 CPO Session received:', sessionData.id);
+    console.log('📊 CPO Session received:', sessionData);
+        const startDate = sessionData.start_date_time ? new Date(sessionData.start_date_time) : null;
+    const endDate = sessionData.end_date_time ? new Date(sessionData.end_date_time) : null;
+        if (startDate && isNaN(startDate.getTime())) {
+      console.error('❌ Invalid start_date_time:', sessionData.start_date_time);
+      return res.status(400).json({
+        status_code: 2002,
+        status_message: 'Invalid start_date_time format',
+        data: {}
+      });
+    }
     
     await db.execute(sql`
       INSERT INTO sessions (id, location_id, user_id, start_date, end_date, kwh, total_cost, status, created_at, updated_at)
       VALUES (${sessionData.id}, ${sessionData.location_id}, ${sessionData.user_id || null}, 
-              ${new Date(sessionData.start_date_time)}, 
-              ${sessionData.end_date_time ? new Date(sessionData.end_date_time) : null}, 
-              ${sessionData.kwh || 0}, ${sessionData.total_cost || 0}, 
+              ${startDate}, ${endDate}, 
+              ${parseFloat(sessionData.kwh) || 0}, ${parseFloat(sessionData.total_cost) || 0}, 
               ${sessionData.status || 'ACTIVE'}, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET
         end_date = EXCLUDED.end_date,
@@ -623,7 +631,7 @@ app.post('/ocpi/cpo/sessions', async (req, res) => {
     });
   }
 });
-
+// ԱՎԵԼԱՑՆԵԼ CDR ENDPOINT-Ը
 app.post('/ocpi/cpo/cdrs', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -637,15 +645,28 @@ app.post('/ocpi/cpo/cdrs', async (req, res) => {
     }
 
     const cdrData = req.body;
-    console.log('📄 CPO CDR received:', cdrData.id);
+    console.log('📄 CPO CDR received:', cdrData);
+    
+    // Convert string dates to Date objects
+    const startDate = cdrData.start_date_time ? new Date(cdrData.start_date_time) : null;
+    const endDate = cdrData.end_date_time ? new Date(cdrData.end_date_time) : null;
+    
+    // Check if dates are valid
+    if (startDate && isNaN(startDate.getTime())) {
+      console.error('❌ Invalid start_date_time:', cdrData.start_date_time);
+      return res.status(400).json({
+        status_code: 2002,
+        status_message: 'Invalid start_date_time format',
+        data: {}
+      });
+    }
     
     await db.execute(sql`
       INSERT INTO cdrs (id, session_id, location_id, user_id, start_date, end_date, kwh, total_cost, currency, status, created_at, updated_at)
       VALUES (${cdrData.id}, ${cdrData.session_id}, ${cdrData.location_id}, ${cdrData.user_id || null},
-              ${new Date(cdrData.start_date_time)}, 
-              ${cdrData.end_date_time ? new Date(cdrData.end_date_time) : null},
-              ${cdrData.kwh || 0}, ${cdrData.total_cost || 0}, ${cdrData.currency || 'AMD'},
-              ${cdrData.status || 'COMPLETED'}, NOW(), NOW())
+              ${startDate}, ${endDate},
+              ${parseFloat(cdrData.kwh) || 0}, ${parseFloat(cdrData.total_cost) || 0}, 
+              ${cdrData.currency || 'AMD'}, ${cdrData.status || 'COMPLETED'}, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET
         end_date = EXCLUDED.end_date,
         kwh = EXCLUDED.kwh,
@@ -668,8 +689,6 @@ app.post('/ocpi/cpo/cdrs', async (req, res) => {
     });
   }
 });
-
-// EMSP endpoints (for our bot)
 app.get('/ocpi/emsp/locations', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
