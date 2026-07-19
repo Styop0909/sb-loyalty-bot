@@ -1462,52 +1462,22 @@ bot.action('partner_tariffs', async (ctx) => {
   const lang = user?.language || 'hy';
   
   const tariffsData = await db.select().from(tariffs);
-  const tariffs = tariffsData || [];
   
-  if (tariffs.length === 0) {
+  if (tariffsData.length === 0) {
     return ctx.reply('💰 Տարիֆներ դեռ չկան');
   }
   
   let text = '💰 *FastCharge տարիֆներ:*\n\n';
-  for (const t of tariffs) {
-    text += `*${t.id.slice(0, 8)}*\n`;
-    text += `💵 ${t.currency || 'AMD'}\n`;
+  for (const t of tariffsData) {
+    text += `📌 *ID:* ${t.id.slice(0, 8)}...\n`;
+    text += `💵 *Արժույթ:* ${t.currency || 'AMD'}\n`;
+    text += `⚡ *Էներգիա:* ${t.energy_price || 0} ${t.currency || 'AMD'}/kWh\n`;
     
-    let elements = [];
-    try {
-      elements = typeof t.elements === 'string' ? JSON.parse(t.elements) : t.elements;
-    } catch (e) {
-      elements = [];
-    }
-    
-    if (Array.isArray(elements) && elements.length > 0) {
-      for (const element of elements) {
-        if (element.price_components && Array.isArray(element.price_components)) {
-          for (const comp of element.price_components) {
-            let type = comp.type || 'UNKNOWN';
-            let price = comp.price || 0;
-            let step = comp.step_size || 1;
-            let vat = comp.vat || 0;
-            
-            if (type === 'ENERGY') {
-              text += `⚡ ${price} ${t.currency || 'AMD'}/kWh (${vat}% VAT)\n`;
-            } else if (type === 'FLAT') {
-              text += `📋 ${price} ${t.currency || 'AMD'} (${vat}% VAT)\n`;
-            } else if (type === 'PARKING_TIME') {
-              text += `🅿️ ${price} ${t.currency || 'AMD'}/hour (${vat}% VAT)\n`;
-            } else {
-              text += `📌 ${type}: ${price} ${t.currency || 'AMD'} (step: ${step})\n`;
-            }
-          }
-        }
-      }
-    }
-    
-    text += `💰 energy_price: ${t.energy_price || 0} ${t.currency || 'AMD'}\n`;
     if (t.parking_fee && t.parking_fee > 0) {
-      text += `🅿️ parking_fee: ${t.parking_fee} ${t.currency || 'AMD'}\n`;
+      text += `🅿️ *Կայանման վճար:* ${t.parking_fee} ${t.currency || 'AMD'}\n`;
     }
-    text += '\n';
+    
+    text += '\n---\n\n';
   }
   
   const keyboard = Markup.inlineKeyboard([
@@ -1522,14 +1492,13 @@ bot.action('partner_sessions', async (ctx) => {
   const lang = user?.language || 'hy';
   
   const sessionsData = await db.select().from(sessions).orderBy(desc(sessions.createdAt)).limit(20);
-  const sessions = sessionsData || [];
   
-  if (sessions.length === 0) {
+  if (sessionsData.length === 0) {
     return ctx.reply('📊 Սեսիաներ դեռ չկան');
   }
   
   let text = '📊 *FastCharge սեսիաներ:*\n\n';
-  for (const s of sessions) {
+  for (const s of sessionsData) {
     text += `🆔 ${s.id}\n`;
     text += `📍 ${s.locationId || 'N/A'}\n`;
     text += `📅 ${s.startDate ? new Date(s.startDate).toLocaleString() : 'N/A'}\n`;
@@ -1551,14 +1520,13 @@ bot.action('partner_cdrs', async (ctx) => {
   const lang = user?.language || 'hy';
   
   const sessionsData = await db.select().from(sessions).orderBy(desc(sessions.createdAt)).limit(20);
-  const sessions = sessionsData || [];
   
-  if (sessions.length === 0) {
+  if (sessionsData.length === 0) {
     return ctx.reply('📄 CDRs դեռ չկան');
   }
   
   let text = '📄 *FastCharge CDRs:*\n\n';
-  for (const s of sessions) {
+  for (const s of sessionsData) {
     text += `🆔 ${s.id}\n`;
     text += `📍 ${s.locationId || 'N/A'}\n`;
     text += `📅 ${s.startDate ? new Date(s.startDate).toLocaleString() : 'N/A'}\n`;
