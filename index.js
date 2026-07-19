@@ -1301,58 +1301,163 @@ bot.hears([getTranslation('hy', 'partners'), getTranslation('ru', 'partners'), g
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
   
-  const keyboard = Markup.keyboard([
-    ['⚡ FastCharge', '🏢 Մյուս գործընկերներ'],
-    [getTranslation(lang, 'back')]
-  ]).resize();
-  
-  await ctx.reply('🏢 *Ընտրեք գործընկեր:*', {
-    parse_mode: 'Markdown',
-    ...keyboard
-  });
-});
-
-bot.hears(['⚡ FastCharge'], async (ctx) => {
-  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
-  const lang = user?.language || 'hy';
-  const t = (key, ...args) => getTranslation(lang, key, ...args);
-  
-  const keyboard = Markup.keyboard([
-    [t('locations'), t('tariffs')],
-    [t('sessions'), t('cdrs')],
-    [t('back')]
-  ]).resize();
-  
-  await ctx.reply('⚡ *FastCharge - Ընտրեք բաժինը:*', {
-    parse_mode: 'Markdown',
-    ...keyboard
-  });
-});
-
-bot.hears(['🏢 Մյուս գործընկերներ'], async (ctx) => {
-  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
-  const lang = user?.language || 'hy';
-  
   const partnersList = await db.select().from(partners).where(eq(partners.isActive, true));
   
   if (partnersList.length === 0) {
     return ctx.reply(getTranslation(lang, 'noPartners'));
   }
   
-  let text = getTranslation(lang, 'partnersTitle') + '\n\n';
+  const keyboard = [];
   for (let p of partnersList) {
     let name = p.name;
     if (lang === 'ru' && p.nameRu) name = p.nameRu;
     if (lang === 'en' && p.nameEn) name = p.nameEn;
-    text += `*${name}*\n`;
-    if (p.description) text += `${p.description}\n`;
-    if (p.address) text += `📍 ${p.address}\n`;
-    if (p.phone) text += `📞 ${p.phone}\n`;
-    text += getTranslation(lang, 'partnersBonus', p.commission) + '\n\n';
+    keyboard.push([Markup.button.callback(`🏢 ${name}`, `partner_${p.id}`)]);
+  }
+  keyboard.push([Markup.button.callback(getTranslation(lang, 'back'), 'back_to_main')]);
+  
+  await ctx.reply(getTranslation(lang, 'partnersTitle'), {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard(keyboard)
+  });
+});
+
+bot.action(/partner_(\d+)/, async (ctx) => {
+  const partnerId = parseInt(ctx.match[1]);
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const partner = await db.select().from(partners).where(eq(partners.id, partnerId)).then(r => r[0]);
+  if (!partner) {
+    await ctx.answerCbQuery('Գործընկերը չի գտնվել');
+    return;
   }
   
-  const keyboard = Markup.keyboard([[getTranslation(lang, 'back')]]).resize();
+  let name = partner.name;
+  if (lang === 'ru' && partner.nameRu) name = partner.nameRu;
+  if (lang === 'en' && partner.nameEn) name = partner.nameEn;
+  
+  if (partnerId === 1 || partner.name.toLowerCase().includes('fastcharge')) {
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('📍 Կայաններ', 'partner_locations')],
+      [Markup.button.callback('💰 Տարիֆներ', 'partner_tariffs')],
+      [Markup.button.callback('📊 Սեսիաներ', 'partner_sessions')],
+      [Markup.button.callback('📄 CDRs', 'partner_cdrs')],
+      [Markup.button.callback('◀️ Հետ', 'back_to_partners')]
+    ]);
+    await ctx.reply(`🏢 *${name}*\n\nԸնտրեք բաժինը:`, {
+      parse_mode: 'Markdown',
+      ...keyboard
+    });
+  } else {
+    let text = `🏢 *${name}*\n\n`;
+    if (partner.description) text += `${partner.description}\n`;
+    if (partner.address) text += `📍 ${partner.address}\n`;
+    if (partner.phone) text += `📞 ${partner.phone}\n`;
+    text += `💰 Բոնուս: ${partner.commission}%`;
+    
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('◀️ Հետ', 'back_to_partners')]
+    ]);
+    await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+  }
+  
+  await ctx.answerCbQuery();
+});
+
+bot.action('partner_locations', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const locationsData = await db.execute(sql`SELECT * FROM locations WHERE publish = true`);
+  const locations = locationsData.rows || locationsData;
+  
+  if (locations.length === 0) {
+    return ctx.reply('📭 Կայաններ դեռ չկան');
+  }
+  
+  let text = '🔌 *FastCharge կայաններ:*\n\n';
+  for (const loc of locations) {
+    text += `*${loc.name}*\n`;
+    text += `📍 ${loc.address || 'Հասցեն նշված չէ'}\n`;
+    text += `🏙️ ${loc.city || 'Քաղաքը նշված չէ'}\n`;
+    text += `🔌 ${loc.evses?.length || 0} միացում\n\n`;
+  }
+  
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('◀️ Հետ', 'back_to_fastcharge')]
+  ]);
+  
   await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+  await ctx.answerCbQuery();
+});
+
+bot.action('partner_tariffs', async (ctx) => {
+  await ctx.reply('⚠️ *Տարիֆները դեռ չեն աշխատում:*\nՄենք աշխատում ենք այս ֆունկցիայի վրա և շուտով այն հասանելի կլինի:', {
+    parse_mode: 'Markdown'
+  });
+  await ctx.answerCbQuery();
+});
+
+bot.action('partner_sessions', async (ctx) => {
+  await ctx.reply('⚠️ *Սեսիաները դեռ չեն աշխատում:*\nՄենք աշխատում ենք այս ֆունկցիայի վրա և շուտով այն հասանելի կլինի:', {
+    parse_mode: 'Markdown'
+  });
+  await ctx.answerCbQuery();
+});
+
+bot.action('partner_cdrs', async (ctx) => {
+  await ctx.reply('⚠️ *CDRs-ը դեռ չեն աշխատում:*\nՄենք աշխատում ենք այս ֆունկցիայի վրա և շուտով այն հասանելի կլինի:', {
+    parse_mode: 'Markdown'
+  });
+  await ctx.answerCbQuery();
+});
+
+bot.action('back_to_partners', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const partnersList = await db.select().from(partners).where(eq(partners.isActive, true));
+  
+  const keyboard = [];
+  for (let p of partnersList) {
+    let name = p.name;
+    if (lang === 'ru' && p.nameRu) name = p.nameRu;
+    if (lang === 'en' && p.nameEn) name = p.nameEn;
+    keyboard.push([Markup.button.callback(`🏢 ${name}`, `partner_${p.id}`)]);
+  }
+  keyboard.push([Markup.button.callback(getTranslation(lang, 'back'), 'back_to_main')]);
+  
+  await ctx.reply(getTranslation(lang, 'partnersTitle'), {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard(keyboard)
+  });
+  await ctx.answerCbQuery();
+});
+
+bot.action('back_to_fastcharge', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const partner = await db.select().from(partners).where(eq(partners.name, 'FastCharge')).then(r => r[0]);
+  if (!partner) {
+    await ctx.answerCbQuery('Գործընկերը չի գտնվել');
+    return;
+  }
+  
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('📍 Կայաններ', 'partner_locations')],
+    [Markup.button.callback('💰 Տարիֆներ', 'partner_tariffs')],
+    [Markup.button.callback('📊 Սեսիաներ', 'partner_sessions')],
+    [Markup.button.callback('📄 CDRs', 'partner_cdrs')],
+    [Markup.button.callback('◀️ Հետ', 'back_to_partners')]
+  ]);
+  
+  await ctx.reply('⚡ *FastCharge*\n\nԸնտրեք բաժինը:', {
+    parse_mode: 'Markdown',
+    ...keyboard
+  });
+  await ctx.answerCbQuery();
 });
 
 bot.hears([getTranslation('hy', 'menu'), getTranslation('ru', 'menu'), getTranslation('en', 'menu')], async (ctx) => {
