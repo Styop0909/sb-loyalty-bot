@@ -590,6 +590,7 @@ app.post('/ocpi/cpo/sessions', async (req, res) => {
         data: {}
       });
     }
+
     const sessionData = req.body;
     console.log('📊 CPO Session received:', sessionData);
         const startDate = sessionData.start_date_time ? new Date(sessionData.start_date_time) : null;
@@ -631,7 +632,6 @@ app.post('/ocpi/cpo/sessions', async (req, res) => {
     });
   }
 });
-// ԱՎԵԼԱՑՆԵԼ CDR ENDPOINT-Ը
 app.post('/ocpi/cpo/cdrs', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -646,13 +646,9 @@ app.post('/ocpi/cpo/cdrs', async (req, res) => {
 
     const cdrData = req.body;
     console.log('📄 CPO CDR received:', cdrData);
-    
-    // Convert string dates to Date objects
-    const startDate = cdrData.start_date_time ? new Date(cdrData.start_date_time) : null;
+        const startDate = cdrData.start_date_time ? new Date(cdrData.start_date_time) : null;
     const endDate = cdrData.end_date_time ? new Date(cdrData.end_date_time) : null;
-    
-    // Check if dates are valid
-    if (startDate && isNaN(startDate.getTime())) {
+        if (startDate && isNaN(startDate.getTime())) {
       console.error('❌ Invalid start_date_time:', cdrData.start_date_time);
       return res.status(400).json({
         status_code: 2002,
