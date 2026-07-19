@@ -1,6 +1,19 @@
-const { pgTable, serial, bigint, varchar, integer, boolean, timestamp, text, decimal, jsonb } = require('drizzle-orm/pg-core');
+import { 
+  pgTable, 
+  serial, 
+  bigint, 
+  varchar, 
+  integer, 
+  boolean, 
+  timestamp, 
+  text, 
+  decimal, 
+  jsonb,
+  numeric 
+} from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
 
-const users = pgTable('users', {
+export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   telegramId: bigint('telegram_id', { mode: 'number' }).unique().notNull(),
   firstName: varchar('first_name', { length: 100 }),
@@ -19,7 +32,7 @@ const users = pgTable('users', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-const orders = pgTable('orders', {
+export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').notNull(),
   city: varchar('city', { length: 50 }).notNull(),
@@ -32,7 +45,7 @@ const orders = pgTable('orders', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-const bonusTransactions = pgTable('bonus_transactions', {
+export const bonusTransactions = pgTable('bonus_transactions', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').notNull(),
   type: varchar('type', { length: 20 }),
@@ -43,7 +56,7 @@ const bonusTransactions = pgTable('bonus_transactions', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-const menuItems = pgTable('menu_items', {
+export const menuItems = pgTable('menu_items', {
   id: serial('id').primaryKey(),
   city: varchar('city', { length: 50 }).notNull(),
   name: varchar('name', { length: 200 }).notNull(),
@@ -57,7 +70,7 @@ const menuItems = pgTable('menu_items', {
   isAvailable: boolean('is_available').default(true),
 });
 
-const complaints = pgTable('complaints', {
+export const complaints = pgTable('complaints', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').notNull(),
   orderId: integer('order_id'),
@@ -67,7 +80,7 @@ const complaints = pgTable('complaints', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-const partners = pgTable('partners', {
+export const partners = pgTable('partners', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 200 }).notNull(),
   nameHy: varchar('name_hy', { length: 200 }),
@@ -83,7 +96,7 @@ const partners = pgTable('partners', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-const userBonusesByPartner = pgTable('user_bonuses_by_partner', {
+export const userBonusesByPartner = pgTable('user_bonuses_by_partner', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').notNull(),
   partnerId: integer('partner_id').notNull(),
@@ -91,7 +104,8 @@ const userBonusesByPartner = pgTable('user_bonuses_by_partner', {
   orderId: integer('order_id'),
   createdAt: timestamp('created_at').defaultNow(),
 });
-const locations = pgTable('locations', {
+
+export const locations = pgTable('locations', {
   id: varchar('id', { length: 255 }).primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   address: text('address'),
@@ -104,7 +118,7 @@ const locations = pgTable('locations', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-const tariffs = pgTable('tariffs', {
+export const tariffs = pgTable('tariffs', {
   id: varchar('id', { length: 255 }).primaryKey(),
   currency: varchar('currency', { length: 3 }).default('AMD'),
   elements: jsonb('elements'),
@@ -114,7 +128,7 @@ const tariffs = pgTable('tariffs', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-const sessions = pgTable('sessions', {
+export const sessions = pgTable('sessions', {
   id: varchar('id', { length: 255 }).primaryKey(),
   locationId: varchar('location_id', { length: 255 }),
   startDate: timestamp('start_date').notNull(),
@@ -141,16 +155,39 @@ export const cdrs = pgTable('cdrs', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
-module.exports = {
-  users,
-  orders,
-  menuItems,
-  bonusTransactions,
-  complaints,
-  partners,
-  userBonusesByPartner,
-  locations,
-  tariffs,
-  sessions,
-  cdrs
-};
+
+export const usersRelations = relations(users, ({ many, one }) => ({
+  orders: many(orders),
+  bonusTransactions: many(bonusTransactions),
+  complaints: many(complaints),
+  sessions: many(sessions),
+  cdrs: many(cdrs),
+  referrals: many(users, { relationName: 'referrals' }),
+  inviter: one(users, { fields: [users.invitedBy], references: [users.id], relationName: 'referrals' }),
+}));
+
+export const ordersRelations = relations(orders, ({ one }) => ({
+  user: one(users, { fields: [orders.userId], references: [users.id] }),
+}));
+
+export const bonusTransactionsRelations = relations(bonusTransactions, ({ one }) => ({
+  user: one(users, { fields: [bonusTransactions.userId], references: [users.id] }),
+  order: one(orders, { fields: [bonusTransactions.orderId], references: [orders.id] }),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, { fields: [sessions.userId], references: [users.id] }),
+}));
+
+export const cdrsRelations = relations(cdrs, ({ one }) => ({
+  user: one(users, { fields: [cdrs.userId], references: [users.id] }),
+  session: one(sessions, { fields: [cdrs.sessionId], references: [sessions.id] }),
+}));
+
+export const locationsRelations = relations(locations, ({ many }) => ({
+  sessions: many(sessions),
+}));
+
+export const tariffsRelations = relations(tariffs, ({ many }) => ({
+  sessions: many(sessions),
+}));
