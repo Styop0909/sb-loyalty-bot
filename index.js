@@ -1458,19 +1458,16 @@ bot.action('partner_locations', async (ctx) => {
 });
 
 bot.action('partner_tariffs', async (ctx) => {
-  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
-  const lang = user?.language || 'hy';
-  
   const tariffsData = await db.select().from(tariffs);
   
   if (tariffsData.length === 0) {
     return ctx.reply('💰 Տարիֆներ դեռ չկան');
   }
   
-  let text = '💰 *FastCharge տարիֆներ:*\n\n';
-  for (const t of tariffsData) {
-    text += `📌 *ID:* ${t.id.slice(0, 8)}...\n`;
-    text += `💵 *Արժույթ:* ${t.currency || 'AMD'}\n`;
+  let text = '💰 *Սակագներ (Tariffs)*\n\n';
+  
+  for (let i = 0; i < tariffsData.length; i++) {
+    const t = tariffsData[i];
     
     let elements = [];
     try {
@@ -1487,33 +1484,31 @@ bot.action('partner_tariffs', async (ctx) => {
       for (const element of elements) {
         if (element.price_components && Array.isArray(element.price_components)) {
           for (const comp of element.price_components) {
-            const type = comp.type || '';
-            const price = comp.price || 0;
-            const vat = comp.vat || 0;
-            
-            if (type === 'ENERGY') {
-              energyPrice = price;
-              text += `⚡ *Էներգիա:* ${price} ${t.currency || 'AMD'}/kWh (${vat}% VAT)\n`;
-            } else if (type === 'PARKING_TIME') {
-              parkingPrice = price;
-              text += `🅿️ *Կայանում:* ${price} ${t.currency || 'AMD'}/ժամ (${vat}% VAT)\n`;
-            } else if (type === 'FLAT') {
-              flatPrice = price;
-              text += `📋 *Ֆիքսված:* ${price} ${t.currency || 'AMD'} (${vat}% VAT)\n`;
-            }
+            if (comp.type === 'ENERGY') energyPrice = comp.price;
+            else if (comp.type === 'PARKING_TIME') parkingPrice = comp.price;
+            else if (comp.type === 'FLAT') flatPrice = comp.price;
           }
         }
       }
     }
-        if (energyPrice === null && t.energy_price > 0) {
-      text += `⚡ *Էներգիա:* ${t.energy_price} ${t.currency || 'AMD'}/kWh\n`;
+    
+    if (energyPrice === null && t.energy_price > 0) energyPrice = t.energy_price;
+    if (parkingPrice === null && t.parking_fee > 0) parkingPrice = t.parking_fee;
+    
+    if (energyPrice === null) continue;
+    
+    text += `🔹 *Տարբերակ ${i + 1}*\n`;
+    text += `⚡ ${energyPrice} ${t.currency || 'AMD'}/kWh`;
+    
+    if (parkingPrice && parkingPrice > 0) {
+      text += `  •  🅿️ ${parkingPrice} ${t.currency || 'AMD'}/ժամ`;
     }
     
-    if (parkingPrice === null && t.parking_fee > 0) {
-      text += `🅿️ *Կայանում:* ${t.parking_fee} ${t.currency || 'AMD'}/ժամ\n`;
-    }
-    
-    text += '\n---\n\n';
+    text += '\n\n';
+  }
+  
+  if (text.length > 4000) {
+    text = text.slice(0, 3800) + '\n\n... և այլն';
   }
   
   const keyboard = Markup.inlineKeyboard([
