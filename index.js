@@ -1431,9 +1431,6 @@ bot.action(/partner_(\d+)/, async (ctx) => {
 });
 
 bot.action('partner_locations', async (ctx) => {
-  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
-  const lang = user?.language || 'hy';
-  
   const locationsData = await db.execute(sql`SELECT * FROM locations WHERE publish = true`);
   const locations = locationsData.rows || locationsData;
   
@@ -1441,12 +1438,36 @@ bot.action('partner_locations', async (ctx) => {
     return ctx.reply('📭 Կայաններ դեռ չկան');
   }
   
-  let text = '🔌 *FastCharge կայաններ:*\n\n';
-  for (const loc of locations) {
-    text += `*${loc.name}*\n`;
-    text += `📍 ${loc.address || 'Հասցեն նշված չէ'}\n`;
-    text += `🏙️ ${loc.city || 'Քաղաքը նշված չէ'}\n`;
-    text += `🔌 ${loc.evses?.length || 0} միացում\n\n`;
+  let text = '🔌 *Լիցքավորման կայաններ*\n\n';
+  
+  for (let i = 0; i < locations.length; i++) {
+    const loc = locations[i];
+    
+    text += `${i + 1}. *${loc.name}*\n`;
+    if (loc.address) text += `📍 ${loc.address}\n`;
+    if (loc.city) text += `🏙️ ${loc.city}\n`;
+    
+    let evses = [];
+    try {
+      evses = typeof loc.evses === 'string' ? JSON.parse(loc.evses) : loc.evses;
+    } catch (e) {
+      evses = [];
+    }
+    
+    const connectors = evses.reduce((count, evse) => {
+      return count + (evse.connectors?.length || 0);
+    }, 0);
+    
+    text += `🔌 ${connectors || 0} միացում`;
+    
+    const isOnline = loc.is_online !== false;
+    text += isOnline ? '  🟢 *Հասանելի*' : '  🔴 *Անհասանելի*';
+    
+    text += '\n\n';
+  }
+  
+  if (text.length > 4000) {
+    text = text.slice(0, 3800) + '\n\n... և այլն';
   }
   
   const keyboard = Markup.inlineKeyboard([
