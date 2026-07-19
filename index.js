@@ -1135,14 +1135,79 @@ async function syncLocations() {
   }
 }
 
-// Run immediately on startup (after server is ready)
+async function syncTariffs() {
+  try {
+    console.log('💰 Syncing tariffs from Fast Charge...');
+    
+    const https = require('https');
+    const options = {
+      hostname: 'api.fastcharge.company',
+      path: '/v2/ocpi/2.2.1/cpo/tariffs',
+      method: 'GET',
+      headers: {
+        'Authorization': `Token ${FAST_CHARGE_BASE64}`
+      }
+    };
+
+    return new Promise((resolve, reject) => {
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', async () => {
+          try {
+            const json = JSON.parse(data);
+            if (json.status_code === 1000) {
+              console.log(`💰 Received ${json.data.length} tariffs`);
+              
+              for (const tariff of json.data) {
+                await db.execute(sql`
+                  INSERT INTO tariffs (id, currency, elements, energy_price, parking_fee, updated_at)
+                  VALUES (${tariff.id}, ${tariff.currency || 'AMD'}, ${JSON.stringify(tariff.elements || {})}, 
+                          ${tariff.energy_price || 0}, ${tariff.parking_fee || 0}, NOW())
+                  ON CONFLICT (id) DO UPDATE SET
+                    currency = EXCLUDED.currency,
+                    elements = EXCLUDED.elements,
+                    energy_price = EXCLUDED.energy_price,
+                    parking_fee = EXCLUDED.parking_fee,
+                    updated_at = NOW()
+                `);
+              }
+              
+              console.log('✅ Tariffs synced successfully');
+              resolve(json.data);
+            } else {
+              console.error('❌ Fast Charge error:', json.status_message);
+              reject(new Error(json.status_message));
+            }
+          } catch (e) {
+            console.error('❌ Parse error:', e.message);
+            reject(e);
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        console.error('❌ Request error:', e.message);
+        reject(e);
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('❌ Sync error:', error.message);
+  }
+}
+
+// Run immediately on startup
 setTimeout(() => {
   syncLocations().catch(console.error);
+  syncTariffs().catch(console.error);
 }, 5000);
 
 // Then every 10 minutes
 setInterval(() => {
   syncLocations().catch(console.error);
+  syncTariffs().catch(console.error);
 }, 10 * 60 * 1000);
 
 app.use('/ocpi', ocpiRouter);
@@ -1393,23 +1458,85 @@ bot.action('partner_locations', async (ctx) => {
 });
 
 bot.action('partner_tariffs', async (ctx) => {
-  await ctx.reply('⚠️ *Տարիֆները դեռ չեն աշխատում:*\nՄենք աշխատում ենք այս ֆունկցիայի վրա և շուտով այն հասանելի կլինի:', {
-    parse_mode: 'Markdown'
-  });
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const tariffsData = await db.select().from(tariffs);
+  const tariffs = tariffsData || [];
+  
+  if (tariffs.length === 0) {
+    return ctx.reply('💰 Տարիֆներ դեռ չկան');
+  }
+  
+  let text = '💰 *FastCharge տարիֆներ:*\n\n';
+  for (const t of tariffs) {
+    text += `*${t.id}*\n`;
+    text += `💵 ${t.currency || 'AMD'} — ${t.energy_price || 0} / kWh\n`;
+    text += `🅿️ ${t.parking_fee || 0} ${t.currency || 'AMD'}\n\n`;
+  }
+  
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('◀️ Հետ', 'back_to_fastcharge')]
+  ]);
+  
+  await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
   await ctx.answerCbQuery();
 });
 
 bot.action('partner_sessions', async (ctx) => {
-  await ctx.reply('⚠️ *Սեսիաները դեռ չեն աշխատում:*\nՄենք աշխատում ենք այս ֆունկցիայի վրա և շուտով այն հասանելի կլինի:', {
-    parse_mode: 'Markdown'
-  });
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const sessionsData = await db.select().from(sessions).orderBy(desc(sessions.createdAt)).limit(20);
+  const sessions = sessionsData || [];
+  
+  if (sessions.length === 0) {
+    return ctx.reply('📊 Սեսիաներ դեռ չկան');
+  }
+  
+  let text = '📊 *FastCharge սեսիաներ:*\n\n';
+  for (const s of sessions) {
+    text += `🆔 ${s.id}\n`;
+    text += `📍 ${s.locationId || 'N/A'}\n`;
+    text += `📅 ${s.startDate ? new Date(s.startDate).toLocaleString() : 'N/A'}\n`;
+    text += `⚡ ${s.kwh || 0} kWh\n`;
+    text += `💵 ${s.totalCost || 0} AMD\n`;
+    text += `📌 ${s.status || 'N/A'}\n\n`;
+  }
+  
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('◀️ Հետ', 'back_to_fastcharge')]
+  ]);
+  
+  await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
   await ctx.answerCbQuery();
 });
 
 bot.action('partner_cdrs', async (ctx) => {
-  await ctx.reply('⚠️ *CDRs-ը դեռ չեն աշխատում:*\nՄենք աշխատում ենք այս ֆունկցիայի վրա և շուտով այն հասանելի կլինի:', {
-    parse_mode: 'Markdown'
-  });
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const sessionsData = await db.select().from(sessions).orderBy(desc(sessions.createdAt)).limit(20);
+  const sessions = sessionsData || [];
+  
+  if (sessions.length === 0) {
+    return ctx.reply('📄 CDRs դեռ չկան');
+  }
+  
+  let text = '📄 *FastCharge CDRs:*\n\n';
+  for (const s of sessions) {
+    text += `🆔 ${s.id}\n`;
+    text += `📍 ${s.locationId || 'N/A'}\n`;
+    text += `📅 ${s.startDate ? new Date(s.startDate).toLocaleString() : 'N/A'}\n`;
+    text += `⚡ ${s.kwh || 0} kWh\n`;
+    text += `💵 ${s.totalCost || 0} AMD\n\n`;
+  }
+  
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('◀️ Հետ', 'back_to_fastcharge')]
+  ]);
+  
+  await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
   await ctx.answerCbQuery();
 });
 
@@ -2294,7 +2421,6 @@ bot.hears(
     const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
     const lang = user?.language || 'hy';
     
-    // CDRs աղյուսակ չկա, ցույց տալ sessions-ը որպես օրինակ
     const sessionsData = await db.select().from(sessions).orderBy(desc(sessions.createdAt)).limit(20);
     const sessions = sessionsData || [];
     
