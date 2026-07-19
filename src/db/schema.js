@@ -152,4 +152,5 @@ module.exports = {
   locations,
   tariffs,
   sessions,
+  cdrs
 };
