@@ -11,7 +11,8 @@ const {
   userBonusesByPartner,
   locations,
   tariffs,
-  sessions
+  sessions,
+  cdrs
 } = require('./src/db/schema.js');
 const { eq, desc, and } = require('drizzle-orm');
 const { getTranslation } = require('./i18n');
@@ -43,11 +44,20 @@ const port = process.env.PORT || 8080;
 const QRCode = require('qrcode');
 app.use(express.json());
 
+// Sync state management
+let isSyncing = false;
+let lastSyncTime = 0;
+const SYNC_INTERVAL = 10 * 60 * 1000; // 10 minutes
+const MIN_SYNC_INTERVAL = 30000; // 30 seconds minimum between syncs
+
+// Cache management
 let locationsCache = null;
 let tariffsCache = null;
 let lastLocationsFetch = 0;
 let lastTariffsFetch = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// OCPI Endpoints
 app.get('/ocpi/versions', (req, res) => {
   res.json({
     status_code: 1000,
@@ -80,6 +90,30 @@ app.get('/ocpi/details', (req, res) => {
   });
 });
 
+// Authentication helper
+const OUR_TOKEN = process.env.OCPI_TOKEN || '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
+
+function verifyToken(authHeader) {
+  if (!authHeader || !authHeader.startsWith('Token ')) {
+    return { valid: false, error: 'Missing authorization header' };
+  }
+  
+  const base64Token = authHeader.replace('Token ', '');
+  let token;
+  try {
+    token = Buffer.from(base64Token, 'base64').toString('utf8');
+  } catch (e) {
+    return { valid: false, error: 'Invalid token encoding' };
+  }
+  
+  if (token !== OUR_TOKEN) {
+    return { valid: false, error: 'Invalid token' };
+  }
+  
+  return { valid: true, token };
+}
+
+// Credentials handler
 const handleCredentials = async (req, res) => {
   try {
     console.log('📥 Credentials request received:');
@@ -124,7 +158,6 @@ const handleCredentials = async (req, res) => {
       });
     }
 
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
     if (headerToken !== OUR_TOKEN) {
       console.log('❌ Invalid token received');
       return res.status(401).json({
@@ -141,15 +174,22 @@ const handleCredentials = async (req, res) => {
         const data = fs.readFileSync('./connections.json', 'utf8');
         connections = JSON.parse(data);
       } catch (e) {}
-      connections.push({
-        partner: 'fast_charge',
-        url: url,
-        token: headerToken,
-        status: 'active',
-        created_at: new Date().toISOString()
-      });
-      fs.writeFileSync('./connections.json', JSON.stringify(connections, null, 2));
-      console.log('✅ Fast Charge connection stored successfully');
+      
+      // Check if connection already exists
+      const existing = connections.find(c => c.partner === 'fast_charge');
+      if (!existing) {
+        connections.push({
+          partner: 'fast_charge',
+          url: url,
+          token: headerToken,
+          status: 'active',
+          created_at: new Date().toISOString()
+        });
+        fs.writeFileSync('./connections.json', JSON.stringify(connections, null, 2));
+        console.log('✅ Fast Charge connection stored successfully');
+      } else {
+        console.log('ℹ️ Fast Charge connection already exists');
+      }
     } catch (error) {
       console.error('⚠️ Could not store connection:', error.message);
     }
@@ -175,26 +215,15 @@ const handleCredentials = async (req, res) => {
 app.post('/ocpi/credentials', handleCredentials);
 app.post('/ocpi/2.2.1/credentials', handleCredentials);
 
+// Locations endpoint (receiver)
 app.post('/ocpi/locations', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
+        status_message: verification.error,
         data: {}
       });
     }
@@ -250,26 +279,15 @@ app.post('/ocpi/locations', async (req, res) => {
   }
 });
 
+// Tariffs endpoint (receiver)
 app.post('/ocpi/tariffs', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
+        status_message: verification.error,
         data: {}
       });
     }
@@ -314,26 +332,15 @@ app.post('/ocpi/tariffs', async (req, res) => {
   }
 });
 
+// Get locations (sender)
 app.get('/ocpi/locations', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
+        status_message: verification.error,
         data: {}
       });
     }
@@ -367,26 +374,15 @@ app.get('/ocpi/locations', async (req, res) => {
   }
 });
 
+// Get tariffs (sender)
 app.get('/ocpi/tariffs', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
+        status_message: verification.error,
         data: {}
       });
     }
@@ -414,37 +410,35 @@ app.get('/ocpi/tariffs', async (req, res) => {
   }
 });
 
+// Sessions endpoint (receiver - only store in DB)
 app.post('/ocpi/sessions', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
+        status_message: verification.error,
         data: {}
       });
     }
 
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
-        data: {}
-      });
-    }
-
-    const session = req.body;
+    const sessionData = req.body;
+    console.log('📊 Session received:', sessionData.id);
     
     await db.execute(sql`
-      INSERT INTO sessions (id, location_id, start_date, end_date, kwh, total_cost, status, created_at, updated_at)
-      VALUES (${session.id}, ${session.location_id}, ${new Date(session.start_date_time)}, 
-              ${session.end_date_time ? new Date(session.end_date_time) : null}, 
-              ${session.kwh || 0}, ${session.total_cost || 0}, ${session.status || 'ACTIVE'}, NOW(), NOW())
+      INSERT INTO sessions (id, location_id, user_id, start_date, end_date, kwh, total_cost, status, created_at, updated_at)
+      VALUES (${sessionData.id}, ${sessionData.location_id}, ${sessionData.user_id || null}, 
+              ${new Date(sessionData.start_date_time)}, 
+              ${sessionData.end_date_time ? new Date(sessionData.end_date_time) : null}, 
+              ${sessionData.kwh || 0}, ${sessionData.total_cost || 0}, 
+              ${sessionData.status || 'ACTIVE'}, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        end_date = EXCLUDED.end_date,
+        kwh = EXCLUDED.kwh,
+        total_cost = EXCLUDED.total_cost,
+        status = EXCLUDED.status,
+        updated_at = NOW()
     `);
 
     res.json({
@@ -453,7 +447,7 @@ app.post('/ocpi/sessions', async (req, res) => {
       data: {}
     });
   } catch (error) {
-    console.error('Sessions error:', error);
+    console.error('❌ Sessions error:', error);
     res.status(500).json({
       status_code: 3000,
       status_message: 'Internal server error: ' + error.message,
@@ -462,303 +456,61 @@ app.post('/ocpi/sessions', async (req, res) => {
   }
 });
 
-app.get('/ocpi/cpo/:id', async (req, res) => {
+// CDRs endpoint (receiver - only store in DB)
+app.post('/ocpi/cdrs', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
+        status_message: verification.error,
         data: {}
       });
     }
 
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
-        data: {}
-      });
-    }
-
-    const userId = req.params.id;
-    const user = await db.select().from(users).where(eq(users.id, userId)).then(r => r[0]);
+    const cdrData = req.body;
+    console.log('📄 CDR received:', cdrData.id);
     
+    await db.execute(sql`
+      INSERT INTO cdrs (id, session_id, location_id, user_id, start_date, end_date, kwh, total_cost, currency, status, created_at, updated_at)
+      VALUES (${cdrData.id}, ${cdrData.session_id}, ${cdrData.location_id}, ${cdrData.user_id || null},
+              ${new Date(cdrData.start_date_time)}, 
+              ${cdrData.end_date_time ? new Date(cdrData.end_date_time) : null},
+              ${cdrData.kwh || 0}, ${cdrData.total_cost || 0}, ${cdrData.currency || 'AMD'},
+              ${cdrData.status || 'COMPLETED'}, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        end_date = EXCLUDED.end_date,
+        kwh = EXCLUDED.kwh,
+        total_cost = EXCLUDED.total_cost,
+        status = EXCLUDED.status,
+        updated_at = NOW()
+    `);
+
     res.json({
       status_code: 1000,
       status_message: 'Success',
-      data: {
-        allowed: user?.bonusBalance > 1000 || false,
-        token: `token_${user?.id}_${Date.now()}`
-      }
+      data: {}
     });
   } catch (error) {
-    console.error('Authorization error:', error);
+    console.error('❌ CDRs error:', error);
     res.status(500).json({
       status_code: 3000,
-      status_message: 'Internal server error',
+      status_message: 'Internal server error: ' + error.message,
       data: {}
     });
   }
 });
 
+// CPO endpoints (for Fast Charge)
 app.get('/ocpi/cpo/locations', async (req, res) => {
   try {
-    const base64Token = 'WVh6RmRyNjZGSFVFUE44cWRENHUyTXpEa1cyQXdsdWdUNUNZRnk0STFIUVpVWWxBZzBraUZCbThYSHBtdnRWQg==';
-    
-    const https = require('https');
-    const options = {
-      hostname: 'api.fastcharge.company',
-      path: '/v2/ocpi/2.2.1/cpo/locations',
-      method: 'GET',
-      headers: {
-        'Authorization': `Token ${base64Token}`
-      }
-    };
-
-    const request = https.request(options, (response) => {
-      let data = '';
-      response.on('data', (chunk) => data += chunk);
-      response.on('end', async () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.status_code === 1000) {
-            for (const location of json.data) {
-              const hasOnlineConnector = location.evses?.some(evse => 
-                evse.connectors?.some(conn => conn.status === 'online')
-              ) || false;
-              
-              await db.execute(sql`
-                INSERT INTO locations (id, name, address, city, country, latitude, longitude, evses, publish, is_online, updated_at)
-                VALUES (${location.id}, ${location.name}, ${location.address}, ${location.city}, ${location.country}, 
-                        ${parseFloat(location.coordinates.latitude) || 0}, ${parseFloat(location.coordinates.longitude) || 0}, 
-                        ${JSON.stringify(location.evses || [])}, ${location.publish !== false}, ${hasOnlineConnector}, NOW())
-                ON CONFLICT (id) DO UPDATE SET
-                  name = EXCLUDED.name,
-                  address = EXCLUDED.address,
-                  city = EXCLUDED.city,
-                  country = EXCLUDED.country,
-                  latitude = EXCLUDED.latitude,
-                  longitude = EXCLUDED.longitude,
-                  evses = EXCLUDED.evses,
-                  publish = EXCLUDED.publish,
-                  is_online = EXCLUDED.is_online,
-                  updated_at = NOW()
-              `);
-            }
-            res.json({
-              status_code: 1000,
-              status_message: 'Success',
-              data: json.data.map(loc => ({
-                id: loc.id,
-                name: loc.name,
-                address: loc.address,
-                city: loc.city,
-                country: loc.country || 'AM',
-                coordinates: {
-                  latitude: parseFloat(loc.coordinates.latitude) || 0,
-                  longitude: parseFloat(loc.coordinates.longitude) || 0
-                },
-                evses: loc.evses || []
-              }))
-            });
-          } else {
-            res.status(500).json({
-              status_code: 3000,
-              status_message: 'Fast Charge error: ' + json.status_message,
-              data: {}
-            });
-          }
-        } catch (e) {
-          res.status(500).json({
-            status_code: 3000,
-            status_message: 'Invalid response from Fast Charge',
-            data: {}
-          });
-        }
-      });
-    });
-
-    request.on('error', (error) => {
-      console.error('❌ Fast Charge request error:', error);
-      res.status(500).json({
-        status_code: 3000,
-        status_message: 'Error connecting to Fast Charge',
-        data: {}
-      });
-    });
-
-    request.end();
-  } catch (error) {
-    console.error('❌ CPO Locations error:', error);
-    res.status(500).json({
-      status_code: 3000,
-      status_message: 'Internal server error: ' + error.message,
-      data: {}
-    });
-  }
-});
-
-app.get('/ocpi/cpo/tariffs', async (req, res) => {
-  try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
-        data: {}
-      });
-    }
-
-    const result = await db.select().from(tariffs);
-    
-    res.json({
-      status_code: 1000,
-      status_message: 'Success',
-      data: result.map(t => ({
-        id: t.id,
-        currency: t.currency || 'AMD',
-        elements: t.elements || {},
-        energy_price: parseFloat(t.energyPrice) || 0,
-        parking_fee: parseFloat(t.parkingFee) || 0
-      }))
-    });
-  } catch (error) {
-    console.error('CPO Tariffs error:', error);
-    res.status(500).json({
-      status_code: 3000,
-      status_message: 'Internal server error: ' + error.message,
-      data: {}
-    });
-  }
-});
-
-app.post('/ocpi/cpo/sessions', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
-        data: {}
-      });
-    }
-
-    const session = req.body;
-    console.log('📊 CPO Session received:', session);
-    
-    await db.execute(sql`
-      INSERT INTO sessions (id, location_id, start_date, end_date, kwh, total_cost, status, created_at, updated_at)
-      VALUES (${session.id}, ${session.location_id}, ${new Date(session.start_date_time)}, 
-              ${session.end_date_time ? new Date(session.end_date_time) : null}, 
-              ${session.kwh || 0}, ${session.total_cost || 0}, ${session.status || 'ACTIVE'}, NOW(), NOW())
-    `);
-
-    res.json({
-      status_code: 1000,
-      status_message: 'Success',
-      data: {}
-    });
-  } catch (error) {
-    console.error('CPO Sessions error:', error);
-    res.status(500).json({
-      status_code: 3000,
-      status_message: 'Internal server error: ' + error.message,
-      data: {}
-    });
-  }
-});
-
-app.get('/ocpi/cpo/cdrs', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
-        data: {}
-      });
-    }
-
-    res.json({
-      status_code: 1000,
-      status_message: 'Success',
-      data: []
-    });
-  } catch (error) {
-    console.error('CPO CDRs error:', error);
-    res.status(500).json({
-      status_code: 3000,
-      status_message: 'Internal server error: ' + error.message,
-      data: {}
-    });
-  }
-});
-
-app.get('/ocpi/emsp/locations', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
+        status_message: verification.error,
         data: {}
       });
     }
@@ -783,7 +535,7 @@ app.get('/ocpi/emsp/locations', async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('EMSP Locations error:', error);
+    console.error('❌ CPO Locations error:', error);
     res.status(500).json({
       status_code: 3000,
       status_message: 'Internal server error: ' + error.message,
@@ -792,26 +544,14 @@ app.get('/ocpi/emsp/locations', async (req, res) => {
   }
 });
 
-app.get('/ocpi/emsp/tariffs', async (req, res) => {
+app.get('/ocpi/cpo/tariffs', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
+        status_message: verification.error,
         data: {}
       });
     }
@@ -830,7 +570,174 @@ app.get('/ocpi/emsp/tariffs', async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('EMSP Tariffs error:', error);
+    console.error('❌ CPO Tariffs error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.post('/ocpi/cpo/sessions', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: verification.error,
+        data: {}
+      });
+    }
+
+    const sessionData = req.body;
+    console.log('📊 CPO Session received:', sessionData.id);
+    
+    await db.execute(sql`
+      INSERT INTO sessions (id, location_id, user_id, start_date, end_date, kwh, total_cost, status, created_at, updated_at)
+      VALUES (${sessionData.id}, ${sessionData.location_id}, ${sessionData.user_id || null}, 
+              ${new Date(sessionData.start_date_time)}, 
+              ${sessionData.end_date_time ? new Date(sessionData.end_date_time) : null}, 
+              ${sessionData.kwh || 0}, ${sessionData.total_cost || 0}, 
+              ${sessionData.status || 'ACTIVE'}, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        end_date = EXCLUDED.end_date,
+        kwh = EXCLUDED.kwh,
+        total_cost = EXCLUDED.total_cost,
+        status = EXCLUDED.status,
+        updated_at = NOW()
+    `);
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: {}
+    });
+  } catch (error) {
+    console.error('❌ CPO Sessions error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.post('/ocpi/cpo/cdrs', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: verification.error,
+        data: {}
+      });
+    }
+
+    const cdrData = req.body;
+    console.log('📄 CPO CDR received:', cdrData.id);
+    
+    await db.execute(sql`
+      INSERT INTO cdrs (id, session_id, location_id, user_id, start_date, end_date, kwh, total_cost, currency, status, created_at, updated_at)
+      VALUES (${cdrData.id}, ${cdrData.session_id}, ${cdrData.location_id}, ${cdrData.user_id || null},
+              ${new Date(cdrData.start_date_time)}, 
+              ${cdrData.end_date_time ? new Date(cdrData.end_date_time) : null},
+              ${cdrData.kwh || 0}, ${cdrData.total_cost || 0}, ${cdrData.currency || 'AMD'},
+              ${cdrData.status || 'COMPLETED'}, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        end_date = EXCLUDED.end_date,
+        kwh = EXCLUDED.kwh,
+        total_cost = EXCLUDED.total_cost,
+        status = EXCLUDED.status,
+        updated_at = NOW()
+    `);
+
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: {}
+    });
+  } catch (error) {
+    console.error('❌ CPO CDRs error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+// EMSP endpoints (for our bot)
+app.get('/ocpi/emsp/locations', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: verification.error,
+        data: {}
+      });
+    }
+
+    const result = await db.execute(sql`SELECT * FROM locations WHERE publish = true`);
+    const locationsData = result.rows || result;
+    
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: locationsData.map(loc => ({
+        id: loc.id,
+        name: loc.name,
+        address: loc.address,
+        city: loc.city,
+        country: loc.country || 'AM',
+        coordinates: {
+          latitude: parseFloat(loc.latitude) || 0,
+          longitude: parseFloat(loc.longitude) || 0
+        },
+        evses: loc.evses || []
+      }))
+    });
+  } catch (error) {
+    console.error('❌ EMSP Locations error:', error);
+    res.status(500).json({
+      status_code: 3000,
+      status_message: 'Internal server error: ' + error.message,
+      data: {}
+    });
+  }
+});
+
+app.get('/ocpi/emsp/tariffs', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
+      return res.status(401).json({
+        status_code: 2001,
+        status_message: verification.error,
+        data: {}
+      });
+    }
+
+    const result = await db.select().from(tariffs);
+    
+    res.json({
+      status_code: 1000,
+      status_message: 'Success',
+      data: result.map(t => ({
+        id: t.id,
+        currency: t.currency || 'AMD',
+        elements: t.elements || {},
+        energy_price: parseFloat(t.energyPrice) || 0,
+        parking_fee: parseFloat(t.parkingFee) || 0
+      }))
+    });
+  } catch (error) {
+    console.error('❌ EMSP Tariffs error:', error);
     res.status(500).json({
       status_code: 3000,
       status_message: 'Internal server error: ' + error.message,
@@ -842,35 +749,31 @@ app.get('/ocpi/emsp/tariffs', async (req, res) => {
 app.post('/ocpi/emsp/sessions', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
+        status_message: verification.error,
         data: {}
       });
     }
 
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
-        data: {}
-      });
-    }
-
-    const session = req.body;
-    console.log('📊 EMSP Session received:', session);
+    const sessionData = req.body;
+    console.log('📊 EMSP Session received:', sessionData.id);
     
     await db.execute(sql`
-      INSERT INTO sessions (id, location_id, start_date, end_date, kwh, total_cost, status, created_at, updated_at)
-      VALUES (${session.id}, ${session.location_id}, ${new Date(session.start_date_time)}, 
-              ${session.end_date_time ? new Date(session.end_date_time) : null}, 
-              ${session.kwh || 0}, ${session.total_cost || 0}, ${session.status || 'ACTIVE'}, NOW(), NOW())
+      INSERT INTO sessions (id, location_id, user_id, start_date, end_date, kwh, total_cost, status, created_at, updated_at)
+      VALUES (${sessionData.id}, ${sessionData.location_id}, ${sessionData.user_id || null}, 
+              ${new Date(sessionData.start_date_time)}, 
+              ${sessionData.end_date_time ? new Date(sessionData.end_date_time) : null}, 
+              ${sessionData.kwh || 0}, ${sessionData.total_cost || 0}, 
+              ${sessionData.status || 'ACTIVE'}, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        end_date = EXCLUDED.end_date,
+        kwh = EXCLUDED.kwh,
+        total_cost = EXCLUDED.total_cost,
+        status = EXCLUDED.status,
+        updated_at = NOW()
     `);
 
     res.json({
@@ -879,7 +782,7 @@ app.post('/ocpi/emsp/sessions', async (req, res) => {
       data: {}
     });
   } catch (error) {
-    console.error('EMSP Sessions error:', error);
+    console.error('❌ EMSP Sessions error:', error);
     res.status(500).json({
       status_code: 3000,
       status_message: 'Internal server error: ' + error.message,
@@ -888,37 +791,43 @@ app.post('/ocpi/emsp/sessions', async (req, res) => {
   }
 });
 
-app.get('/ocpi/emsp/cdrs', async (req, res) => {
+app.post('/ocpi/emsp/cdrs', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
+        status_message: verification.error,
         data: {}
       });
     }
 
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
-        data: {}
-      });
-    }
+    const cdrData = req.body;
+    console.log('📄 EMSP CDR received:', cdrData.id);
+    
+    await db.execute(sql`
+      INSERT INTO cdrs (id, session_id, location_id, user_id, start_date, end_date, kwh, total_cost, currency, status, created_at, updated_at)
+      VALUES (${cdrData.id}, ${cdrData.session_id}, ${cdrData.location_id}, ${cdrData.user_id || null},
+              ${new Date(cdrData.start_date_time)}, 
+              ${cdrData.end_date_time ? new Date(cdrData.end_date_time) : null},
+              ${cdrData.kwh || 0}, ${cdrData.total_cost || 0}, ${cdrData.currency || 'AMD'},
+              ${cdrData.status || 'COMPLETED'}, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        end_date = EXCLUDED.end_date,
+        kwh = EXCLUDED.kwh,
+        total_cost = EXCLUDED.total_cost,
+        status = EXCLUDED.status,
+        updated_at = NOW()
+    `);
 
     res.json({
       status_code: 1000,
       status_message: 'Success',
-      data: []
+      data: {}
     });
   } catch (error) {
-    console.error('EMSP CDRs error:', error);
+    console.error('❌ EMSP CDRs error:', error);
     res.status(500).json({
       status_code: 3000,
       status_message: 'Internal server error: ' + error.message,
@@ -930,23 +839,11 @@ app.get('/ocpi/emsp/cdrs', async (req, res) => {
 app.post('/ocpi/emsp/commands', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
+        status_message: verification.error,
         data: {}
       });
     }
@@ -963,7 +860,7 @@ app.post('/ocpi/emsp/commands', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('EMSP Commands error:', error);
+    console.error('❌ EMSP Commands error:', error);
     res.status(500).json({
       status_code: 3000,
       status_message: 'Internal server error: ' + error.message,
@@ -975,23 +872,11 @@ app.post('/ocpi/emsp/commands', async (req, res) => {
 app.post('/ocpi/cpo/commands', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
+        status_message: verification.error,
         data: {}
       });
     }
@@ -1008,7 +893,7 @@ app.post('/ocpi/cpo/commands', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('CPO Commands error:', error);
+    console.error('❌ CPO Commands error:', error);
     res.status(500).json({
       status_code: 3000,
       status_message: 'Internal server error: ' + error.message,
@@ -1020,23 +905,11 @@ app.post('/ocpi/cpo/commands', async (req, res) => {
 app.get('/ocpi/hubclientinfo', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const base64Token = authHeader?.replace('Token ', '');
-    let token;
-    try {
-      token = Buffer.from(base64Token, 'base64').toString('utf8');
-    } catch (e) {
+    const verification = verifyToken(authHeader);
+    if (!verification.valid) {
       return res.status(401).json({
         status_code: 2001,
-        status_message: 'Invalid token encoding',
-        data: {}
-      });
-    }
-
-    const OUR_TOKEN = '83Fh78ubergMleuhuehfuYwdwdnuwbeufbuerbvYTuefube03ubeufbefDrtnr45';
-    if (token !== OUR_TOKEN) {
-      return res.status(401).json({
-        status_code: 2001,
-        status_message: 'Invalid token',
+        status_message: verification.error,
         data: {}
       });
     }
@@ -1051,7 +924,7 @@ app.get('/ocpi/hubclientinfo', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('HubClientInfo error:', error);
+    console.error('❌ HubClientInfo error:', error);
     res.status(500).json({
       status_code: 3000,
       status_message: 'Internal server error: ' + error.message,
@@ -1060,7 +933,8 @@ app.get('/ocpi/hubclientinfo', async (req, res) => {
   }
 });
 
-const FAST_CHARGE_BASE64 = 'WVh6RmRyNjZGSFVFUE44cWRENHUyTXpEa1cyQXdsdWdUNUNZRnk0STFIUVpVWWxBZzBraUZCbThYSHBtdnRWQg==';
+// Fast Charge sync functions
+const FAST_CHARGE_BASE64 = process.env.FAST_CHARGE_TOKEN || 'WVh6RmRyNjZGSFVFUE44cWRENHUyTXpEa1cyQXdsdWdUNUNZRnk0STFIUVpVWWxBZzBraUZCbThYSHBtdnRWQg==';
 
 async function syncLocations() {
   try {
@@ -1132,6 +1006,7 @@ async function syncLocations() {
     });
   } catch (error) {
     console.error('❌ Sync error:', error.message);
+    throw error;
   }
 }
 
@@ -1195,25 +1070,61 @@ async function syncTariffs() {
     });
   } catch (error) {
     console.error('❌ Sync error:', error.message);
+    throw error;
   }
 }
 
-// Run immediately on startup
+// Improved sync function with state management
+async function syncData() {
+  if (isSyncing) {
+    console.log('⏳ Sync already in progress, skipping...');
+    return;
+  }
+  
+  const now = Date.now();
+  if (now - lastSyncTime < MIN_SYNC_INTERVAL) {
+    console.log('⏳ Too soon since last sync, skipping...');
+    return;
+  }
+  
+  isSyncing = true;
+  try {
+    await Promise.allSettled([syncLocations(), syncTariffs()]);
+    lastSyncTime = now;
+    console.log('✅ Sync completed successfully');
+  } catch (error) {
+    console.error('❌ Sync failed:', error);
+  } finally {
+    isSyncing = false;
+  }
+}
+
+// Start sync on startup with delay
 setTimeout(() => {
-  syncLocations().catch(console.error);
-  syncTariffs().catch(console.error);
+  syncData().catch(console.error);
 }, 5000);
 
-// Then every 10 minutes
+// Regular sync every 10 minutes
 setInterval(() => {
-  syncLocations().catch(console.error);
-  syncTariffs().catch(console.error);
-}, 10 * 60 * 1000);
+  syncData().catch(console.error);
+}, SYNC_INTERVAL);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    lastSync: new Date(lastSyncTime).toISOString(),
+    isSyncing: isSyncing
+  });
+});
 
 app.use('/ocpi', ocpiRouter);
 app.get('/', (req, res) => {
   res.send('TuTak Bot is running!');
 });
+
 app.listen(port, () => {
   console.log(`✅ HTTP server running on port ${port}`);
 });
@@ -1406,8 +1317,6 @@ bot.action(/partner_(\d+)/, async (ctx) => {
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback('📍 Կայաններ', 'partner_locations')],
       [Markup.button.callback('💰 Տարիֆներ', 'partner_tariffs')],
-      [Markup.button.callback('📊 Սեսիաներ', 'partner_sessions')],
-      [Markup.button.callback('📄 CDRs', 'partner_cdrs')],
       [Markup.button.callback('◀️ Հետ', 'back_to_partners')]
     ]);
     await ctx.reply(`🏢 *${name}*\n\nԸնտրեք բաժինը:`, {
@@ -1539,60 +1448,6 @@ bot.action('partner_tariffs', async (ctx) => {
   await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
   await ctx.answerCbQuery();
 });
-bot.action('partner_sessions', async (ctx) => {
-  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
-  const lang = user?.language || 'hy';
-  
-  const sessionsData = await db.select().from(sessions).orderBy(desc(sessions.createdAt)).limit(20);
-  
-  if (sessionsData.length === 0) {
-    return ctx.reply('📊 Սեսիաներ դեռ չկան');
-  }
-  
-  let text = '📊 *FastCharge սեսիաներ:*\n\n';
-  for (const s of sessionsData) {
-    text += `🆔 ${s.id}\n`;
-    text += `📍 ${s.locationId || 'N/A'}\n`;
-    text += `📅 ${s.startDate ? new Date(s.startDate).toLocaleString() : 'N/A'}\n`;
-    text += `⚡ ${s.kwh || 0} kWh\n`;
-    text += `💵 ${s.totalCost || 0} AMD\n`;
-    text += `📌 ${s.status || 'N/A'}\n\n`;
-  }
-  
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('◀️ Հետ', 'back_to_fastcharge')]
-  ]);
-  
-  await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
-  await ctx.answerCbQuery();
-});
-
-bot.action('partner_cdrs', async (ctx) => {
-  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
-  const lang = user?.language || 'hy';
-  
-  const sessionsData = await db.select().from(sessions).orderBy(desc(sessions.createdAt)).limit(20);
-  
-  if (sessionsData.length === 0) {
-    return ctx.reply('📄 CDRs դեռ չկան');
-  }
-  
-  let text = '📄 *FastCharge CDRs:*\n\n';
-  for (const s of sessionsData) {
-    text += `🆔 ${s.id}\n`;
-    text += `📍 ${s.locationId || 'N/A'}\n`;
-    text += `📅 ${s.startDate ? new Date(s.startDate).toLocaleString() : 'N/A'}\n`;
-    text += `⚡ ${s.kwh || 0} kWh\n`;
-    text += `💵 ${s.totalCost || 0} AMD\n\n`;
-  }
-  
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('◀️ Հետ', 'back_to_fastcharge')]
-  ]);
-  
-  await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
-  await ctx.answerCbQuery();
-});
 
 bot.action('back_to_partners', async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
@@ -1629,8 +1484,6 @@ bot.action('back_to_fastcharge', async (ctx) => {
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('📍 Կայաններ', 'partner_locations')],
     [Markup.button.callback('💰 Տարիֆներ', 'partner_tariffs')],
-    [Markup.button.callback('📊 Սեսիաներ', 'partner_sessions')],
-    [Markup.button.callback('📄 CDRs', 'partner_cdrs')],
     [Markup.button.callback('◀️ Հետ', 'back_to_partners')]
   ]);
   
@@ -2377,7 +2230,6 @@ bot.hears(
     
     const keyboard = Markup.keyboard([
       [t('locations'), t('tariffs')],
-      [t('sessions'), t('cdrs')],
       [t('back')]
     ]).resize();
     
@@ -2432,63 +2284,6 @@ bot.hears(
       text += `*${t.id}*\n`;
       text += `💵 ${t.currency || 'AMD'} — ${t.energy_price || 0} / kWh\n`;
       text += `🅿️ ${t.parking_fee || 0} ${t.currency || 'AMD'}\n\n`;
-    }
-    
-    ctx.reply(text, { parse_mode: 'Markdown' });
-  }
-);
-
-bot.hears(
-  [getTranslation('hy', 'sessions'), 
-   getTranslation('ru', 'sessions'), 
-   getTranslation('en', 'sessions')], 
-  async (ctx) => {
-    const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
-    const lang = user?.language || 'hy';
-    
-    const sessionsData = await db.select().from(sessions).orderBy(desc(sessions.createdAt)).limit(20);
-    const sessions = sessionsData || [];
-    
-    if (sessions.length === 0) {
-      return ctx.reply('📊 Սեսիաներ դեռ չկան');
-    }
-    
-    let text = '📊 *FastCharge սեսիաներ:*\n\n';
-    for (const s of sessions) {
-      text += `🆔 ${s.id}\n`;
-      text += `📍 ${s.locationId || 'N/A'}\n`;
-      text += `📅 ${s.startDate ? new Date(s.startDate).toLocaleString() : 'N/A'}\n`;
-      text += `⚡ ${s.kwh || 0} kWh\n`;
-      text += `💵 ${s.totalCost || 0} AMD\n`;
-      text += `📌 ${s.status || 'N/A'}\n\n`;
-    }
-    
-    ctx.reply(text, { parse_mode: 'Markdown' });
-  }
-);
-
-bot.hears(
-  [getTranslation('hy', 'cdrs'), 
-   getTranslation('ru', 'cdrs'), 
-   getTranslation('en', 'cdrs')], 
-  async (ctx) => {
-    const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
-    const lang = user?.language || 'hy';
-    
-    const sessionsData = await db.select().from(sessions).orderBy(desc(sessions.createdAt)).limit(20);
-    const sessions = sessionsData || [];
-    
-    if (sessions.length === 0) {
-      return ctx.reply('📄 CDRs դեռ չկան');
-    }
-    
-    let text = '📄 *FastCharge CDRs:*\n\n';
-    for (const s of sessions) {
-      text += `🆔 ${s.id}\n`;
-      text += `📍 ${s.locationId || 'N/A'}\n`;
-      text += `📅 ${s.startDate ? new Date(s.startDate).toLocaleString() : 'N/A'}\n`;
-      text += `⚡ ${s.kwh || 0} kWh\n`;
-      text += `💵 ${s.totalCost || 0} AMD\n\n`;
     }
     
     ctx.reply(text, { parse_mode: 'Markdown' });
