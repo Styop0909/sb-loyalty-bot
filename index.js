@@ -1470,9 +1470,44 @@ bot.action('partner_tariffs', async (ctx) => {
   
   let text = '💰 *FastCharge տարիֆներ:*\n\n';
   for (const t of tariffs) {
-    text += `*${t.id}*\n`;
-    text += `💵 ${t.currency || 'AMD'} — ${t.energy_price || 0} / kWh\n`;
-    text += `🅿️ ${t.parking_fee || 0} ${t.currency || 'AMD'}\n\n`;
+    text += `*${t.id.slice(0, 8)}*\n`;
+    text += `💵 ${t.currency || 'AMD'}\n`;
+    
+    let elements = [];
+    try {
+      elements = typeof t.elements === 'string' ? JSON.parse(t.elements) : t.elements;
+    } catch (e) {
+      elements = [];
+    }
+    
+    if (Array.isArray(elements) && elements.length > 0) {
+      for (const element of elements) {
+        if (element.price_components && Array.isArray(element.price_components)) {
+          for (const comp of element.price_components) {
+            let type = comp.type || 'UNKNOWN';
+            let price = comp.price || 0;
+            let step = comp.step_size || 1;
+            let vat = comp.vat || 0;
+            
+            if (type === 'ENERGY') {
+              text += `⚡ ${price} ${t.currency || 'AMD'}/kWh (${vat}% VAT)\n`;
+            } else if (type === 'FLAT') {
+              text += `📋 ${price} ${t.currency || 'AMD'} (${vat}% VAT)\n`;
+            } else if (type === 'PARKING_TIME') {
+              text += `🅿️ ${price} ${t.currency || 'AMD'}/hour (${vat}% VAT)\n`;
+            } else {
+              text += `📌 ${type}: ${price} ${t.currency || 'AMD'} (step: ${step})\n`;
+            }
+          }
+        }
+      }
+    }
+    
+    text += `💰 energy_price: ${t.energy_price || 0} ${t.currency || 'AMD'}\n`;
+    if (t.parking_fee && t.parking_fee > 0) {
+      text += `🅿️ parking_fee: ${t.parking_fee} ${t.currency || 'AMD'}\n`;
+    }
+    text += '\n';
   }
   
   const keyboard = Markup.inlineKeyboard([
@@ -1482,7 +1517,6 @@ bot.action('partner_tariffs', async (ctx) => {
   await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
   await ctx.answerCbQuery();
 });
-
 bot.action('partner_sessions', async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
