@@ -119,6 +119,7 @@ const sessions = pgTable('sessions', {
   locationId: varchar('location_id', { length: 255 }),
   startDate: timestamp('start_date').notNull(),
   endDate: timestamp('end_date'),
+  userId: integer('user_id').references(() => users.id),
   kwh: decimal('kwh', { precision: 10, scale: 2 }),
   totalCost: decimal('total_cost', { precision: 10, scale: 2 }),
   status: varchar('status', { length: 50 }),
@@ -126,6 +127,20 @@ const sessions = pgTable('sessions', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+export const cdrs = pgTable('cdrs', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id'),
+  locationId: text('location_id'),
+  userId: integer('user_id').references(() => users.id),
+  startDate: timestamp('start_date'),
+  endDate: timestamp('end_date'),
+  kwh: numeric('kwh').default('0'),
+  totalCost: numeric('total_cost').default('0'),
+  currency: text('currency').default('AMD'),
+  status: text('status').default('COMPLETED'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
 module.exports = {
   users,
   orders,
