@@ -1,7 +1,6 @@
 import winston from 'winston';
-import config from '../config/index.js';
 
-const { combine, timestamp, printf, colorize, json } = winston.format;
+const { combine, timestamp, printf, colorize } = winston.format;
 
 const myFormat = printf(({ level, message, timestamp, ...meta }) => {
   const metaStr = Object.keys(meta).length ? `\n${JSON.stringify(meta, null, 2)}` : '';
@@ -9,24 +8,16 @@ const myFormat = printf(({ level, message, timestamp, ...meta }) => {
 });
 
 export const logger = winston.createLogger({
-  level: config.isProduction ? 'info' : 'debug',
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
   format: combine(
     timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    config.isProduction ? json() : colorize(),
+    colorize(),
     myFormat
   ),
   transports: [
     new winston.transports.Console(),
-    new winston.transports.File({ 
-      filename: 'logs/error.log', 
-      level: 'error',
-      maxFiles: 5,
-    }),
-    new winston.transports.File({ 
-      filename: 'logs/combined.log',
-      maxsize: 5242880,
-      maxFiles: 5,
-    }),
+    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'logs/combined.log' }),
   ],
 });
 
