@@ -1,3 +1,4 @@
+// src/ocpi/server.js
 import express from 'express';
 import crypto from 'crypto';
 
@@ -26,8 +27,6 @@ router.get('/', (req, res) => {
 
 router.get('/versions', (req, res) => {
   const host = req.get('host');
-  console.log('🔍 Host from request:', host);
-  console.log('🔍 Full URL:', `https://${host}/details`);
   res.json({
     status_code: 1000,
     status_message: 'Success',
@@ -64,7 +63,6 @@ router.post('/credentials', async (req, res) => {
     const { token, url, roles } = req.body;
 
     const expectedToken = process.env.OCPI_TOKEN_A_NEW;
-    console.log('🔑 Expected token:', expectedToken ? 'set' : 'MISSING');
     
     if (!expectedToken) {
       console.error('❌ OCPI_TOKEN_A environment variable is not set');
@@ -124,10 +122,8 @@ router.post('/credentials', async (req, res) => {
 router.get('/locations', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    console.log('🔍 GET /locations auth:', authHeader ? 'present' : 'missing');
     
     if (!authHeader || authHeader !== `Token ${tokenC}`) {
-      console.warn('⚠️ Unauthorized GET /locations attempt');
       return res.status(401).json({ 
         status_code: 2001, 
         status_message: 'Unauthorized',
@@ -154,10 +150,8 @@ router.get('/locations', async (req, res) => {
 router.get('/tariffs', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    console.log('🔍 GET /tariffs auth:', authHeader ? 'present' : 'missing');
     
     if (!authHeader || authHeader !== `Token ${tokenC}`) {
-      console.warn('⚠️ Unauthorized GET /tariffs attempt');
       return res.status(401).json({ 
         status_code: 2001, 
         status_message: 'Unauthorized',
@@ -184,5 +178,3 @@ router.get('/tariffs', async (req, res) => {
 console.log('🔥 OCPI Router loaded!');
 
 export default router;
-
-export { router };
