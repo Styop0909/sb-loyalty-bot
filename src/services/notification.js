@@ -72,12 +72,9 @@ class NotificationService {
 • 👤 Face ID / Touch ID
 • 💳 Apple Pay / Google Pay
 • 📍 Real-time tracking
-• 🎨 Նոր դիզայն
 
 💎 *Բոնուս առաջին 100 օգտատերերի համար:*
-Ներբեռնեք և ստացեք *500 բոնուս* նվեր:
-
-📲 *Սպասում ենք ձեզ:*`;
+Ներբեռնեք և ստացեք *500 բոնուս* նվեր:`;
 
       for (const user of users) {
         try {
