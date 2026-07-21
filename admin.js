@@ -1,24 +1,11 @@
 import AdminHandlers from './src/handlers/admin.js';
 import { bot } from './src/index.js';
-import logger from './src/utils/logger.js';
 
 let adminInstance = null;
 
 function getAdminInstance() {
   if (!adminInstance) {
-    try {
-      adminInstance = new AdminHandlers(bot);
-    } catch (error) {
-      logger.error('❌ Failed to initialize admin handlers:', error);
-      adminInstance = new Proxy({}, {
-        get: (target, prop) => {
-          logger.warn(`⚠️ Admin function "${prop}" called before bot is ready`);
-          return async () => {
-            throw new Error('Bot not ready yet');
-          };
-        }
-      });
-    }
+    adminInstance = new AdminHandlers(bot);
   }
   return adminInstance;
 }
