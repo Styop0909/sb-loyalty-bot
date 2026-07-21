@@ -129,4 +129,22 @@ class MenuHandlers {
         total += subtotal;
         text += `${item.name} x${item.quantity} — ${subtotal} ֏\n`;
       }
-      text += `\n💰 Ընդամենը: ${total}
+      text += `\n💰 Ընդամենը: ${total} ֏`;
+      
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Պատվիրել', 'checkout')],
+        [Markup.button.callback('🗑 Մաքրել', 'clear_cart')]
+      ]);
+      
+      await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+      await ctx.answerCbQuery();
+    });
+  }
+
+  async getUser(telegramId) {
+    const result = await db.select().from(users).where(eq(users.telegramId, telegramId));
+    return result[0] || null;
+  }
+}
+
+export default MenuHandlers;
