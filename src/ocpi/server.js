@@ -1,6 +1,7 @@
-const express = require('express');
+import express from 'express';
+import crypto from 'crypto';
+
 const router = express.Router();
-const crypto = require('crypto');
 
 const OUR_PARTY = {
   country_code: 'AM',
@@ -181,4 +182,7 @@ router.get('/tariffs', async (req, res) => {
 });
 
 console.log('🔥 OCPI Router loaded!');
-module.exports = router;
+
+export default router;
+
+export { router };
