@@ -1,23 +1,33 @@
 {
   "name": "sb-loyalty-bot",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "description": "TuTak Loyalty Bot with OCPI 2.2.1 integration",
   "main": "index.js",
-"scripts": {
-  "start": "node index.js"
-},
-  "keywords": [],
-  "author": "",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "seed": "node seedMenu.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "keywords": ["telegram", "bot", "loyalty", "ocpi", "fastcharge"],
+  "author": "TuTak Team",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
     "pg": "^8.21.0",
-    "telegraf": "^4.16.3",
     "qrcode": "^1.5.3",
-    "telegraf-session-local": "^2.1.1"
+    "telegraf": "^4.16.3",
+    "telegraf-session-local": "^2.1.1",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "winston": "^3.11.0"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.10"
