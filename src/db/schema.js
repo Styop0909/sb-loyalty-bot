@@ -56,6 +56,12 @@ export const bonusTransactions = pgTable('bonus_transactions', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const appNotifications = pgTable('app_notifications', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).unique().notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 export const menuItems = pgTable('menu_items', {
   id: serial('id').primaryKey(),
   city: varchar('city', { length: 50 }).notNull(),
