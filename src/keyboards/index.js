@@ -4,11 +4,11 @@ import { getTranslation } from '../../i18n.js';
 export function mainMenu(lang) {
   const t = (key, ...args) => getTranslation(lang, key, ...args);
   return Markup.keyboard([
-    ['🍽 Մենյու', '💎 Բոնուս'],
-    ['👥 Ռեֆերալ', '📋 Պատվերներ'],
-    ['🏙 Քաղաք', '🌐 Լեզու'],
-    ['🏢 Գործընկերներ', '🛒 Զամբյուղ'],
-    ['📊 Վիճակագրություն', '🏗 Շինանյութեր'],
+    [t('menu'), t('bonus')],
+    [t('referral'), t('myOrders')],
+    [t('changeCity'), t('changeLanguage')],
+    [t('partners'), t('cart')],
+    [t('myStats'), t('buildingMaterials')],
     ['🔌 Fast Charge', '📱 Mobile App']
   ]).resize();
 }
@@ -79,12 +79,6 @@ export function inlineAdminManagement() {
   ]);
 }
 
-export function inlineBackButton(callback = 'back_to_main') {
-  return Markup.inlineKeyboard([
-    [Markup.button.callback('◀️ Հետ', callback)]
-  ]);
-}
-
 export function inlineConfirmButtons(orderId) {
   return Markup.inlineKeyboard([
     [Markup.button.callback('✅ Հաստատել', `confirm_order_${orderId}`)],
@@ -92,16 +86,8 @@ export function inlineConfirmButtons(orderId) {
   ]);
 }
 
-export default {
-  mainMenu,
-  cityMenu,
-  languageMenu,
-  adminMenu,
-  fastChargeMenu,
-  buildingMaterialsMenu,
-  inlineAdminMenu,
-  inlinePartnerMenu,
-  inlineAdminManagement,
-  inlineBackButton,
-  inlineConfirmButtons,
-};
+export function inlineBackButton(callback = 'back_to_main') {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('◀️ Հետ', callback)]
+  ]);
+}
