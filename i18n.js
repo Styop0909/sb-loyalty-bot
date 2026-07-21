@@ -142,6 +142,13 @@ Tu Tak-ի գործընկերների մոտ:
     selectBuildingMaterial: '🏗️ Ընտրեք շինանյութի կատեգորիա:',
     selectSand: '🏖️ Ընտրեք ավազի տեսակը:',
     selectGravel: '🪨 Ընտրեք խիճի տեսակը:',
+    'fastCharge': '🔌 Fast Charge',
+    'mobileApp': '📱 Mobile App',
+    'mySessions': '📊 Իմ սեսիաները',
+    'fastChargeQR': '📱 FastCharge QR',
+    'appComingSoon': '📱 Mobile App - Շուտով',
+    'notifyMe': '🔔 Ծանուցել ինձ',
+    'visitWebsite': '🌐 Այցելել կայք'
   },
   ru: {
     welcome: `🦜 Заряжаешь электромобиль каждый день?
@@ -286,6 +293,13 @@ Tu Tak-ի գործընկերների մոտ:
     selectBuildingMaterial: '🏗️ Выберите категорию стройматериалов:',
     selectSand: '🏖️ Выберите тип песка:',
     selectGravel: '🪨 Выберите тип щебня:',
+    'fastCharge': '🔌 Fast Charge',
+    'mobileApp': '📱 Mobile App',
+    'mySessions': '📊 Мои сессии',
+    'fastChargeQR': '📱 FastCharge QR',
+    'appComingSoon': '📱 Mobile App - Скоро',
+    'notifyMe': '🔔 Уведомить меня',
+    'visitWebsite': '🌐 Посетить сайт'
   },
   en: {
     welcome: `🦜 Do you charge your EV every day?
@@ -430,6 +444,13 @@ Charge up and accumulate 👇`,
     selectBuildingMaterial: '🏗️ Select building material category:',
     selectSand: '🏖️ Select sand type:',
     selectGravel: '🪨 Select gravel type:',
+    'fastCharge': '🔌 Fast Charge',
+    'mobileApp': '📱 Mobile App',
+    'mySessions': '📊 My Sessions',
+    'fastChargeQR': '📱 FastCharge QR',
+    'appComingSoon': '📱 Mobile App - Coming Soon',
+    'notifyMe': '🔔 Notify me',
+    'visitWebsite': '🌐 Visit website'
   },
 };
 
