@@ -1154,7 +1154,8 @@ function mainMenu(lang) {
     [t('referral'), t('myOrders')],
     [t('changeCity'), t('changeLanguage')],
     [t('partners'), t('cart')],
-    [t('myStats'), t('buildingMaterials')]
+    [t('myStats'), t('buildingMaterials')],
+    ['🔌 Fast Charge', '📱 Mobile App']  
   ]).resize();
 }
 
@@ -1292,7 +1293,12 @@ bot.hears([getTranslation('hy', 'partners'), getTranslation('ru', 'partners'), g
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
   
-  const partnersList = await db.select().from(partners).where(eq(partners.isActive, true));
+  const partnersList = await db.select()
+    .from(partners)
+    .where(and(
+      eq(partners.isActive, true),
+      sql`${partners.name} != 'FastCharge'`
+    ));
   
   if (partnersList.length === 0) {
     return ctx.reply(getTranslation(lang, 'noPartners'));
@@ -2053,6 +2059,52 @@ bot.hears([getTranslation('hy', 'myOrders'), getTranslation('ru', 'myOrders'), g
   }
   ctx.reply(text, { parse_mode: 'Markdown' });
 });
+bot.hears(['📱 Mobile App', 'Mobile App'], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const text = 
+`📱 *TuTak Mobile App*
+
+Մենք աշխատում ենք մեր բջջային հավելվածի վրա:
+
+🚀 *Առանձնահատկություններ:*
+• Ավելի արագ պատվիրում
+• Push notifications
+• Face ID / Touch ID մուտք
+• Apple Pay / Google Pay
+• Real-time tracking
+• Ավելի լավ UI/UX
+
+⏳ *Թողարկում:* Շուտով
+
+🔗 *Link:* https://tutak.app (կշտկվի)
+
+📝 *Ցանկանու՞մ եք առաջիններից իմանալ թողարկման մասին:*
+Սեղմեք 🔔 կոճակը և մենք ձեզ կտեղեկացնենք:`;
+
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('🔔 Ծանուցել ինձ', 'notify_app_launch')],
+    [Markup.button.url('🌐 Այցելել կայք', 'https://tutak.app')]
+  ]);
+  
+  await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+});
+bot.action('notify_app_launch', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  if (!user) {
+    await ctx.answerCbQuery('Խնդրում եմ գրանցվեք /start-ով', { show_alert: true });
+    return;
+  }
+  await db.execute(sql`
+    INSERT INTO app_notifications (user_id, created_at)
+    VALUES (${user.id}, NOW())
+    ON CONFLICT (user_id) DO NOTHING
+  `);
+  
+  await ctx.answerCbQuery('✅ Դուք գրանցվել եք ծանուցումների համար!', { show_alert: true });
+  await ctx.reply('🎉 Շնորհակալություն! Մենք ձեզ կտեղեկացնենք, երբ հավելվածը թողարկվի:');
+});
 
 bot.hears([getTranslation('hy', 'changeCity'), getTranslation('ru', 'changeCity'), getTranslation('en', 'changeCity')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
@@ -2085,6 +2137,224 @@ bot.hears([getTranslation('hy', 'changeLanguage'), getTranslation('ru', 'changeL
   ctx.reply(t('selectLanguage'), languageMenu(user.language));
 });
 
+bot.hears(['🔌 Fast Charge', 'Fast Charge'], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const keyboard = Markup.keyboard([
+    ['📍 Կայաններ', '💰 Տարիֆներ'],
+    ['📊 Իմ սեսիաները', '📱 FastCharge QR'],
+    ['⬅️ Հետ']
+  ]).resize();
+  
+  await ctx.reply(
+    '⚡ *Fast Charge*\n\n' +
+    'Ընտրեք բաժինը:\n\n' +
+    '📍 Կայաններ - Տեսնել բոլոր լիցքավորման կայանները\n' +
+    '💰 Տարիֆներ - Տեսնել գների ցանկը\n' +
+    '📊 Իմ սեսիաները - Ձեր լիցքավորման պատմությունը\n' +
+    '📱 FastCharge QR - Ձեր QR code-ը լիցքավորման համար',
+    { parse_mode: 'Markdown', ...keyboard }
+  );
+});
+
+bot.hears(['📍 Կայաններ', 'FastCharge Locations'], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const locationsData = await db.execute(sql`SELECT * FROM locations WHERE publish = true`);
+  const locations = locationsData.rows || locationsData;
+  
+  if (locations.length === 0) {
+    return ctx.reply('📭 Կայաններ դեռ չկան');
+  }
+  
+  let text = '🔌 *Fast Charge - Լիցքավորման կայաններ*\n\n';
+  
+  for (let i = 0; i < locations.length; i++) {
+    const loc = locations[i];
+    
+    text += `${i + 1}. *${loc.name}*\n`;
+    if (loc.address) text += `📍 ${loc.address}\n`;
+    if (loc.city) text += `🏙️ ${loc.city}\n`;
+    
+    let evses = [];
+    try {
+      evses = typeof loc.evses === 'string' ? JSON.parse(loc.evses) : loc.evses;
+    } catch (e) {
+      evses = [];
+    }
+    
+    const connectors = evses.reduce((count, evse) => {
+      return count + (evse.connectors?.length || 0);
+    }, 0);
+    
+    text += `🔌 ${connectors || 0} միացում`;
+    
+    const isOnline = loc.is_online !== false;
+    text += isOnline ? '  🟢 *Հասանելի*' : '  🔴 *Անհասանելի*';
+    
+    text += '\n\n';
+  }
+  
+  if (text.length > 4000) {
+    text = text.slice(0, 3800) + '\n\n... և այլն';
+  }
+  
+  const keyboard = Markup.keyboard([
+    ['⬅️ Հետ']
+  ]).resize();
+  
+  await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+});
+bot.hears(['💰 Տարիֆներ', 'FastCharge Tariffs'], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const tariffsData = await db.select().from(tariffs);
+  
+  if (tariffsData.length === 0) {
+    return ctx.reply('💰 Տարիֆներ դեռ չկան');
+  }
+  
+  let text = '💰 *Fast Charge - Սակագներ (Tariffs)*\n\n';
+  
+  for (let i = 0; i < tariffsData.length; i++) {
+    const t = tariffsData[i];
+    
+    let elements = [];
+    try {
+      elements = typeof t.elements === 'string' ? JSON.parse(t.elements) : t.elements;
+    } catch (e) {
+      elements = [];
+    }
+    
+    let energyPrice = null;
+    let parkingPrice = null;
+    
+    if (Array.isArray(elements) && elements.length > 0) {
+      for (const element of elements) {
+        if (element.price_components && Array.isArray(element.price_components)) {
+          for (const comp of element.price_components) {
+            if (comp.type === 'ENERGY') energyPrice = comp.price;
+            else if (comp.type === 'PARKING_TIME') parkingPrice = comp.price;
+          }
+        }
+      }
+    }
+    
+    if (energyPrice === null && t.energy_price > 0) energyPrice = t.energy_price;
+    if (parkingPrice === null && t.parking_fee > 0) parkingPrice = t.parking_fee;
+    
+    if (energyPrice === null) continue;
+    
+    text += `🔹 *Տարբերակ ${i + 1}*\n`;
+    text += `⚡ ${energyPrice} ${t.currency || 'AMD'}/kWh`;
+    
+    if (parkingPrice && parkingPrice > 0) {
+      text += `  •  🅿️ ${parkingPrice} ${t.currency || 'AMD'}/ժամ`;
+    }
+    
+    text += '\n\n';
+  }
+  
+  if (text.length > 4000) {
+    text = text.slice(0, 3800) + '\n\n... և այլն';
+  }
+  
+  const keyboard = Markup.keyboard([
+    ['⬅️ Հետ']
+  ]).resize();
+  
+  await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+});
+bot.hears(['📊 Իմ սեսիաները', 'My FastCharge Sessions'], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  const sessionsData = await db.select()
+    .from(sessions)
+    .where(eq(sessions.userId, user.id))
+    .orderBy(desc(sessions.createdAt))
+    .limit(20);
+  
+  if (sessionsData.length === 0) {
+    return ctx.reply('📊 Դուք դեռ չունեք լիցքավորման սեսիաներ');
+  }
+  
+  let text = '📊 *Ձեր Fast Charge սեսիաները*\n\n';
+  let totalCost = 0;
+  let totalKwh = 0;
+  
+  for (const s of sessionsData) {
+    const cost = parseFloat(s.totalCost) || 0;
+    const kwh = parseFloat(s.kwh) || 0;
+    totalCost += cost;
+    totalKwh += kwh;
+    
+    const date = s.startDate ? new Date(s.startDate).toLocaleString() : 'N/A';
+    const status = s.status === 'COMPLETED' ? '✅ Ավարտված' : 
+                   s.status === 'ACTIVE' ? '⏳ Ընթացքի մեջ' : s.status;
+    
+    text += `🆔 ${s.id.slice(0, 12)}...\n`;
+    text += `📅 ${date}\n`;
+    text += `⚡ ${kwh} kWh\n`;
+    text += `💵 ${cost} AMD\n`;
+    text += `📌 ${status}\n\n`;
+  }
+  
+  text += `📊 *Ընդհանուր:*\n`;
+  text += `⚡ ${totalKwh.toFixed(1)} kWh\n`;
+  text += `💵 ${totalCost} AMD\n`;
+  
+  const keyboard = Markup.keyboard([
+    ['⬅️ Հետ']
+  ]).resize();
+  
+  await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+});
+bot.hears(['📱 FastCharge QR', 'FastCharge QR'], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  if (!user) return ctx.reply('Խնդրում եմ գրանցվեք /start-ով');
+    const qrData = {
+    type: 'fastcharge',
+    userId: user.id,
+    telegramId: user.telegramId,
+    username: user.username,
+    timestamp: Date.now()
+  };
+  
+  const qrString = Buffer.from(JSON.stringify(qrData)).toString('base64');
+  const qrImage = await QRCode.toDataURL(qrString);
+  
+  await ctx.replyWithPhoto(
+    { source: Buffer.from(qrImage.split(',')[1], 'base64') },
+    {
+      caption: 
+`📱 *Ձեր Fast Charge QR Code*
+
+Սա ձեր անձնական QR code-ն է Fast Charge-ի համար:
+
+🔹 *Ինչպես օգտագործել:*
+1. Գնացեք Fast Charge կայան
+2. Սկանավորեք այս QR code-ը
+3. Սկսեք լիցքավորումը
+4. Բոնուսները կհաշվարկվեն ավտոմատ
+
+👤 *User:* ${user.firstName || user.username}
+🆔 *ID:* ${user.id}
+💰 *Բոնուս:* 5% cashback
+
+*Պահպանեք այս QR code-ը ձեր հեռախոսում*`,
+      parse_mode: 'Markdown'
+    }
+  );
+});
+bot.hears(['⬅️ Հետ'], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  await ctx.reply('Գլխավոր մենյու', mainMenu(lang));
+});
 bot.hears(
   [getTranslation('hy', 'buildingMaterials'), 
    getTranslation('ru', 'buildingMaterials'), 
