@@ -1,5 +1,5 @@
 import { Markup } from 'telegraf';
-import { getTranslation } from '../i18n/index.js';
+import { getTranslation } from '../../i18n.js';
 
 export function mainMenu(lang) {
   const t = (key, ...args) => getTranslation(lang, key, ...args);
@@ -28,11 +28,6 @@ export function languageMenu(lang) {
   ]).resize();
 }
 
-export function backButton(lang) {
-  const t = (key) => getTranslation(lang, key);
-  return Markup.keyboard([[t('back')]]).resize();
-}
-
 export function adminMenu() {
   return Markup.keyboard([
     ['📦 Պատվերներ', '🍽 Մենյու'],
@@ -55,19 +50,6 @@ export function buildingMaterialsMenu(lang) {
     [t('sand'), t('gravel')],
     [t('back')]
   ]).resize();
-}
-
-export function inlineBackButton(callback = 'back_to_main') {
-  return Markup.inlineKeyboard([
-    [Markup.button.callback('◀️ Հետ', callback)]
-  ]);
-}
-
-export function inlineConfirmButtons(orderId) {
-  return Markup.inlineKeyboard([
-    [Markup.button.callback('✅ Հաստատել', `confirm_order_${orderId}`)],
-    [Markup.button.callback('❌ Մերժել', `reject_order_${orderId}`)]
-  ]);
 }
 
 export function inlineAdminMenu() {
@@ -97,17 +79,29 @@ export function inlineAdminManagement() {
   ]);
 }
 
+export function inlineBackButton(callback = 'back_to_main') {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('◀️ Հետ', callback)]
+  ]);
+}
+
+export function inlineConfirmButtons(orderId) {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('✅ Հաստատել', `confirm_order_${orderId}`)],
+    [Markup.button.callback('❌ Մերժել', `reject_order_${orderId}`)]
+  ]);
+}
+
 export default {
   mainMenu,
   cityMenu,
   languageMenu,
-  backButton,
   adminMenu,
   fastChargeMenu,
   buildingMaterialsMenu,
-  inlineBackButton,
-  inlineConfirmButtons,
   inlineAdminMenu,
   inlinePartnerMenu,
   inlineAdminManagement,
+  inlineBackButton,
+  inlineConfirmButtons,
 };
