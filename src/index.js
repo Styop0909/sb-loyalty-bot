@@ -8,7 +8,6 @@ import config from './config/index.js';
 import logger from './utils/logger.js';
 import { db, closeDb } from './db/index.js';
 import ocpiRouter from './ocpi/server.js';
-import ocpiService from './services/ocpi.js';
 import bonusService from './services/bonus.js';
 
 import {
