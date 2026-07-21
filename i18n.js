@@ -454,7 +454,7 @@ Charge up and accumulate 👇`,
   },
 };
 
-function getTranslation(lang, key, ...args) {
+export function getTranslation(lang, key, ...args) {
   const t = translations[lang] || translations.hy;
   if (typeof t[key] === 'function') {
     return t[key](...args);
@@ -462,4 +462,4 @@ function getTranslation(lang, key, ...args) {
   return t[key] || key;
 }
 
-module.exports = { getTranslation };
+export default { getTranslation };
