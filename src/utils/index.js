@@ -1,1 +1,3 @@
-export * from './helpers.js';
+const helpers = require('./helpers');
+
+module.exports = helpers;
