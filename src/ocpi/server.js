@@ -1,8 +1,6 @@
-// src/ocpi/server.js
-import express from 'express';
-import crypto from 'crypto';
-
+const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 
 const OUR_PARTY = {
   country_code: 'AM',
@@ -59,41 +57,30 @@ router.get('/details', (req, res) => {
 router.post('/credentials', async (req, res) => {
   try {
     console.log('🔥 POST /credentials received:', JSON.stringify(req.body, null, 2));
-    
-    const { token, url, roles } = req.body;
-
+    const { token } = req.body;
     const expectedToken = process.env.OCPI_TOKEN_A_NEW;
-    
     if (!expectedToken) {
-      console.error('❌ OCPI_TOKEN_A environment variable is not set');
       return res.status(500).json({
         status_code: 5000,
         status_message: 'Server configuration error: OCPI_TOKEN_A not set',
         timestamp: new Date().toISOString()
       });
     }
-
     if (!token) {
-      console.error('❌ No token provided in request');
       return res.status(400).json({
         status_code: 2001,
         status_message: 'Missing token in request',
         timestamp: new Date().toISOString()
       });
     }
-
     if (token !== expectedToken) {
-      console.error('❌ Invalid token provided');
       return res.status(401).json({
         status_code: 2001,
         status_message: 'Invalid token',
         timestamp: new Date().toISOString()
       });
     }
-
     tokenC = crypto.randomBytes(48).toString('base64');
-    console.log('✅ Token C generated successfully');
-
     res.json({
       status_code: 1000,
       status_message: 'Success',
@@ -122,59 +109,27 @@ router.post('/credentials', async (req, res) => {
 router.get('/locations', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    
     if (!authHeader || authHeader !== `Token ${tokenC}`) {
-      return res.status(401).json({ 
-        status_code: 2001, 
-        status_message: 'Unauthorized',
-        timestamp: new Date().toISOString()
-      });
+      return res.status(401).json({ status_code: 2001, status_message: 'Unauthorized', timestamp: new Date().toISOString() });
     }
-
-    res.json({
-      status_code: 1000,
-      status_message: 'Success',
-      timestamp: new Date().toISOString(),
-      data: []
-    });
+    res.json({ status_code: 1000, status_message: 'Success', timestamp: new Date().toISOString(), data: [] });
   } catch (error) {
     console.error('❌ GET /locations error:', error);
-    res.status(500).json({
-      status_code: 5000,
-      status_message: 'Internal server error',
-      timestamp: new Date().toISOString()
-    });
+    res.status(500).json({ status_code: 5000, status_message: 'Internal server error', timestamp: new Date().toISOString() });
   }
 });
 
 router.get('/tariffs', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    
     if (!authHeader || authHeader !== `Token ${tokenC}`) {
-      return res.status(401).json({ 
-        status_code: 2001, 
-        status_message: 'Unauthorized',
-        timestamp: new Date().toISOString()
-      });
+      return res.status(401).json({ status_code: 2001, status_message: 'Unauthorized', timestamp: new Date().toISOString() });
     }
-
-    res.json({
-      status_code: 1000,
-      status_message: 'Success',
-      timestamp: new Date().toISOString(),
-      data: []
-    });
+    res.json({ status_code: 1000, status_message: 'Success', timestamp: new Date().toISOString(), data: [] });
   } catch (error) {
     console.error('❌ GET /tariffs error:', error);
-    res.status(500).json({
-      status_code: 5000,
-      status_message: 'Internal server error',
-      timestamp: new Date().toISOString()
-    });
+    res.status(500).json({ status_code: 5000, status_message: 'Internal server error', timestamp: new Date().toISOString() });
   }
 });
 
-console.log('🔥 OCPI Router loaded!');
-
-export default router;
+module.exports = router;
