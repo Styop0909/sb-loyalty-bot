@@ -1,7 +1,7 @@
-import { Markup } from 'telegraf';
-import { getTranslation } from '../../i18n.js';
+const { Markup } = require('telegraf');
+const { getTranslation } = require('../../i18n');
 
-export function mainMenu(lang) {
+function mainMenu(lang) {
   const t = (key, ...args) => getTranslation(lang, key, ...args);
   return Markup.keyboard([
     [t('menu'), t('bonus')],
@@ -13,7 +13,7 @@ export function mainMenu(lang) {
   ]).resize();
 }
 
-export function cityMenu(lang) {
+function cityMenu(lang) {
   const t = (key, ...args) => getTranslation(lang, key, ...args);
   return Markup.keyboard([
     [t('yerevan'), t('echmiadzin')],
@@ -21,14 +21,14 @@ export function cityMenu(lang) {
   ]).resize();
 }
 
-export function languageMenu(lang) {
+function languageMenu(lang) {
   return Markup.keyboard([
     ['Հայերեն', 'Русский', 'English'],
     [getTranslation(lang, 'back')]
   ]).resize();
 }
 
-export function adminMenu() {
+function adminMenu() {
   return Markup.keyboard([
     ['📦 Պատվերներ', '🍽 Մենյու'],
     ['📊 Վիճակագրություն', '👥 Օգտատերեր'],
@@ -36,7 +36,7 @@ export function adminMenu() {
   ]).resize();
 }
 
-export function fastChargeMenu() {
+function fastChargeMenu() {
   return Markup.keyboard([
     ['📍 Կայաններ', '💰 Տարիֆներ'],
     ['📊 Իմ սեսիաները', '📱 FastCharge QR'],
@@ -44,50 +44,10 @@ export function fastChargeMenu() {
   ]).resize();
 }
 
-export function buildingMaterialsMenu(lang) {
-  const t = (key) => getTranslation(lang, key);
-  return Markup.keyboard([
-    [t('sand'), t('gravel')],
-    [t('back')]
-  ]).resize();
-}
-
-export function inlineAdminMenu() {
-  return Markup.inlineKeyboard([
-    [Markup.button.callback('➕ Ավելացնել ուտեստ', 'add_menu_item')],
-    [Markup.button.callback('✏️ Խմբագրել ուտեստ', 'edit_menu_item')],
-    [Markup.button.callback('🗑 Ջնջել ուտեստ', 'delete_menu_item')],
-    [Markup.button.callback('👑 Կառավարել ադմիններ', 'manage_admins')],
-    [Markup.button.callback('🔙 Հետ', 'back_to_admin')]
-  ]);
-}
-
-export function inlinePartnerMenu() {
-  return Markup.inlineKeyboard([
-    [Markup.button.callback('➕ Ավելացնել գործընկեր', 'add_partner')],
-    [Markup.button.callback('✏️ Խմբագրել գործընկեր', 'edit_partner')],
-    [Markup.button.callback('🗑 Ջնջել գործընկեր', 'delete_partner')],
-    [Markup.button.callback('🔙 Հետ', 'back_to_admin')]
-  ]);
-}
-
-export function inlineAdminManagement() {
-  return Markup.inlineKeyboard([
-    [Markup.button.callback('➕ Ավելացնել ադմին', 'add_admin_by_username')],
-    [Markup.button.callback('❌ Հեռացնել ադմին', 'remove_admin_by_username')],
-    [Markup.button.callback('🔙 Հետ', 'back_to_admin')]
-  ]);
-}
-
-export function inlineConfirmButtons(orderId) {
-  return Markup.inlineKeyboard([
-    [Markup.button.callback('✅ Հաստատել', `confirm_order_${orderId}`)],
-    [Markup.button.callback('❌ Մերժել', `reject_order_${orderId}`)]
-  ]);
-}
-
-export function inlineBackButton(callback = 'back_to_main') {
-  return Markup.inlineKeyboard([
-    [Markup.button.callback('◀️ Հետ', callback)]
-  ]);
-}
+module.exports = {
+  mainMenu,
+  cityMenu,
+  languageMenu,
+  adminMenu,
+  fastChargeMenu
+};
