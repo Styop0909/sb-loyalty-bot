@@ -1601,13 +1601,10 @@ bot.hears(['📱 Mobile App', 'Mobile App'], async (ctx) => {
 
 ⏳ *Թողարկում:* Շուտով
 
-🔗 *Link:* https://tutak.app
-
 📝 *Ցանկանու՞մ եք առաջիններից իմանալ թողարկման մասին:*
 Սեղմեք 🔔 կոճակը և մենք ձեզ կտեղեկացնենք:`;
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('🔔 Ծանուցել ինձ', 'notify_app_launch')],
-    [Markup.button.url('🌐 Այցելել կայք', 'https://tutak.app')]
   ]);
   await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
 });
