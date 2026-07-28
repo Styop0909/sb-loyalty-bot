@@ -137,6 +137,17 @@ const appNotifications = pgTable('app_notifications', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+const sessionTokens = pgTable('session_tokens', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  cdrToken: text('cdr_token').unique().notNull(),
+  status: text('status').default('pending'),
+  locationId: text('location_id'),
+  sessionId: text('session_id'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 module.exports = {
   users,
   orders,
@@ -147,6 +158,7 @@ module.exports = {
   locations,
   tariffs,
   sessions,
+  sessionTokens,
   cdrs,
   appNotifications
 };
