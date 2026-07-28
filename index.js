@@ -12,7 +12,8 @@ const {
   locations,
   tariffs,
   sessions,
-  cdrs
+  cdrs,
+  sessionTokens
 } = require('./src/db/schema.js');
 const { eq, desc, and } = require('drizzle-orm');
 const { getTranslation } = require('./i18n');
@@ -48,6 +49,67 @@ let isSyncing = false;
 let lastSyncTime = 0;
 const SYNC_INTERVAL = 10 * 60 * 1000;
 const MIN_SYNC_INTERVAL = 30000;
+
+function generateCdrToken(userId) {
+  return `tutak_${userId}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+}
+
+async function getUserByCdrToken(cdrToken) {
+  const result = await db.select()
+    .from(sessionTokens)
+    .where(eq(sessionTokens.cdrToken, cdrToken));
+  return result[0] || null;
+}
+
+async function updateTokenStatus(cdrToken, status, sessionId) {
+  await db.update(sessionTokens)
+    .set({ 
+      status: status,
+      sessionId: sessionId,
+      updatedAt: new Date()
+    })
+    .where(eq(sessionTokens.cdrToken, cdrToken));
+}
+
+async function calculateBonusForUser(userId, totalCost, cdrId) {
+  const bonusAmount = Math.floor(totalCost * 0.05);
+  if (bonusAmount <= 0) return;
+  
+  const immediateBonus = Math.floor(bonusAmount * 0.3);
+  const frozenBonus = bonusAmount - immediateBonus;
+  
+  await db.transaction(async (trx) => {
+    if (immediateBonus > 0) {
+      await trx.update(users)
+        .set({ bonusBalance: sql`${users.bonusBalance} + ${immediateBonus}` })
+        .where(eq(users.id, userId));
+      
+      await trx.insert(bonusTransactions).values({
+        userId: userId,
+        amount: immediateBonus,
+        type: 'earn',
+        bonusType: 'immediate',
+        description: `Fast Charge 5% bonus (immediate) - CDR ${cdrId}`
+      });
+    }
+    
+    if (frozenBonus > 0) {
+      await trx.update(users)
+        .set({ frozenBonus: sql`${users.frozenBonus} + ${frozenBonus}` })
+        .where(eq(users.id, userId));
+      
+      await trx.insert(bonusTransactions).values({
+        userId: userId,
+        amount: frozenBonus,
+        type: 'earn',
+        bonusType: 'frozen',
+        description: `Fast Charge 5% bonus (frozen) - CDR ${cdrId}`
+      });
+    }
+  });
+  
+  console.log(`💰 Bonus calculated: ${bonusAmount} AMD for user ${userId}`);
+}
 
 app.get('/ocpi/versions', (req, res) => {
   res.json({
@@ -426,15 +488,25 @@ app.post('/ocpi/cpo/sessions', async (req, res) => {
       console.error('❌ Invalid start_date_time:', sessionData.start_date_time);
       return res.status(400).json({ status_code: 2002, status_message: 'Invalid start_date_time format', data: {} });
     }
+    let userId = sessionData.user_id || null;
+    if (sessionData.cdr_token && sessionData.cdr_token.token) {
+      const tokenRecord = await getUserByCdrToken(sessionData.cdr_token.token);
+      if (tokenRecord) {
+        userId = tokenRecord.userId;
+        await updateTokenStatus(sessionData.cdr_token.token, 'active', sessionData.id);
+      }
+    }
     await db.execute(sql`
       INSERT INTO sessions (id, location_id, user_id, start_date, end_date, kwh, total_cost, status, created_at, updated_at)
-      VALUES (${sessionData.id}, ${sessionData.location_id}, ${sessionData.user_id || null}, 
+      VALUES (${sessionData.id}, ${sessionData.location_id}, ${userId}, 
               ${startDate}, ${endDate}, 
               ${parseFloat(sessionData.kwh) || 0}, ${parseFloat(sessionData.total_cost) || 0}, 
               ${sessionData.status || 'ACTIVE'}, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET
-        end_date = EXCLUDED.end_date, kwh = EXCLUDED.kwh,
-        total_cost = EXCLUDED.total_cost, status = EXCLUDED.status,
+        end_date = EXCLUDED.end_date,
+        kwh = EXCLUDED.kwh,
+        total_cost = EXCLUDED.total_cost,
+        status = EXCLUDED.status,
         updated_at = NOW()
     `);
     res.json({ status_code: 1000, status_message: 'Success', data: {} });
@@ -458,15 +530,29 @@ app.post('/ocpi/cpo/cdrs', async (req, res) => {
       console.error('❌ Invalid start_date_time:', cdrData.start_date_time);
       return res.status(400).json({ status_code: 2002, status_message: 'Invalid start_date_time format', data: {} });
     }
+    let userId = cdrData.user_id || null;
+    if (cdrData.cdr_token && cdrData.cdr_token.token) {
+      const tokenRecord = await getUserByCdrToken(cdrData.cdr_token.token);
+      if (tokenRecord) {
+        userId = tokenRecord.userId;
+        await updateTokenStatus(cdrData.cdr_token.token, 'completed', cdrData.session_id);
+        const totalCost = parseFloat(cdrData.total_cost) || 0;
+        if (totalCost > 0 && userId) {
+          await calculateBonusForUser(userId, totalCost, cdrData.id);
+        }
+      }
+    }
     await db.execute(sql`
       INSERT INTO cdrs (id, session_id, location_id, user_id, start_date, end_date, kwh, total_cost, currency, status, created_at, updated_at)
-      VALUES (${cdrData.id}, ${cdrData.session_id}, ${cdrData.location_id}, ${cdrData.user_id || null},
+      VALUES (${cdrData.id}, ${cdrData.session_id}, ${cdrData.location_id}, ${userId},
               ${startDate}, ${endDate},
               ${parseFloat(cdrData.kwh) || 0}, ${parseFloat(cdrData.total_cost) || 0}, 
               ${cdrData.currency || 'AMD'}, ${cdrData.status || 'COMPLETED'}, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET
-        end_date = EXCLUDED.end_date, kwh = EXCLUDED.kwh,
-        total_cost = EXCLUDED.total_cost, status = EXCLUDED.status,
+        end_date = EXCLUDED.end_date,
+        kwh = EXCLUDED.kwh,
+        total_cost = EXCLUDED.total_cost,
+        status = EXCLUDED.status,
         updated_at = NOW()
     `);
     res.json({ status_code: 1000, status_message: 'Success', data: {} });
