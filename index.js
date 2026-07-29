@@ -111,6 +111,96 @@ async function calculateBonusForUser(userId, totalCost, cdrId) {
   console.log(`💰 Bonus calculated: ${bonusAmount} AMD for user ${userId}`);
 }
 
+async function sendStartSession(userId, locationId) {
+  const cdrToken = generateCdrToken(userId);
+  
+  await db.insert(sessionTokens).values({
+    userId: userId,
+    cdrToken: cdrToken,
+    status: 'pending',
+    locationId: locationId
+  });
+  
+  const FAST_TOKEN = process.env.FAST_CHARGE_TOKEN || 'WVh6RmRyNjZGSFVFUE44cWRENHUyTXpEa1cyQXdsdWdUNUNZRnk0STFIUVpVWWxBZzBraUZCbThYSHBtdnRWQg==';
+  const https = require('https');
+  
+  const options = {
+    hostname: 'api.fastcharge.company',
+    path: '/v2/ocpi/2.2.1/emsp/commands',
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${FAST_TOKEN}`,
+      'Content-Type': 'application/json'
+    }
+  };
+  
+  const requestData = JSON.stringify({
+    command: 'START_SESSION',
+    location_id: locationId,
+    cdr_token: {
+      token: cdrToken
+    }
+  });
+  
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const response = JSON.parse(data);
+          resolve(response);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    
+    req.on('error', reject);
+    req.write(requestData);
+    req.end();
+  });
+}
+
+async function sendStopSession(sessionId) {
+  const FAST_TOKEN = process.env.FAST_CHARGE_TOKEN || 'WVh6RmRyNjZGSFVFUE44cWRENHUyTXpEa1cyQXdsdWdUNUNZRnk0STFIUVpVWWxBZzBraUZCbThYSHBtdnRWQg==';
+  const https = require('https');
+  
+  const options = {
+    hostname: 'api.fastcharge.company',
+    path: '/v2/ocpi/2.2.1/emsp/commands',
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${FAST_TOKEN}`,
+      'Content-Type': 'application/json'
+    }
+  };
+  
+  const requestData = JSON.stringify({
+    command: 'STOP_SESSION',
+    session_id: sessionId
+  });
+  
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const response = JSON.parse(data);
+          resolve(response);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    
+    req.on('error', reject);
+    req.write(requestData);
+    req.end();
+  });
+}
+
 app.get('/ocpi/versions', (req, res) => {
   res.json({
     status_code: 1000,
@@ -1169,17 +1259,15 @@ bot.action('back_to_partners', async (ctx) => {
 bot.action('back_to_fastcharge', async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
-  const partner = await db.select().from(partners).where(eq(partners.name, 'FastCharge')).then(r => r[0]);
-  if (!partner) {
-    await ctx.answerCbQuery('Գործընկերը չի գտնվել');
-    return;
-  }
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('📍 Կայաններ', 'partner_locations')],
-    [Markup.button.callback('💰 Տարիֆներ', 'partner_tariffs')],
-    [Markup.button.callback('◀️ Հետ', 'back_to_partners')]
-  ]);
-  await ctx.reply('⚡ *FastCharge*\n\nԸնտրեք բաժինը:', {
+  
+  const keyboard = Markup.keyboard([
+    ['📍 Կայաններ', '💰 Տարիֆներ'],
+    ['📊 Իմ սեսիաները', '📱 FastCharge QR'],
+    ['🔌 Սկսել լիցքավորումը', '🔌 Ավարտել լիցքավորումը'],
+    ['⬅️ Հետ']
+  ]).resize();
+  
+  await ctx.reply('⚡ *Fast Charge*', {
     parse_mode: 'Markdown',
     ...keyboard
   });
@@ -1744,20 +1832,163 @@ bot.hears([getTranslation('hy', 'changeLanguage'), getTranslation('ru', 'changeL
 bot.hears(['🔌 Fast Charge', 'Fast Charge'], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
+  
   const keyboard = Markup.keyboard([
     ['📍 Կայաններ', '💰 Տարիֆներ'],
     ['📊 Իմ սեսիաները', '📱 FastCharge QR'],
+    ['🔌 Սկսել լիցքավորումը', '🔌 Ավարտել լիցքավորումը'],
     ['⬅️ Հետ']
   ]).resize();
+  
   await ctx.reply(
     '⚡ *Fast Charge*\n\n' +
     'Ընտրեք բաժինը:\n\n' +
-    '📍 Կայաններ - Տեսնել բոլոր լիցքավորման կայանները\n' +
-    '💰 Տարիֆներ - Տեսնել գների ցանկը\n' +
-    '📊 Իմ սեսիաները - Ձեր լիցքավորման պատմությունը\n' +
-    '📱 FastCharge QR - Ձեր QR code-ը լիցքավորման համար',
+    '📍 Կայաններ - Տեսնել բոլոր կայանները\n' +
+    '💰 Տարիֆներ - Տեսնել գները\n' +
+    '📊 Իմ սեսիաները - Ձեր պատմությունը\n' +
+    '📱 FastCharge QR - Ձեր QR code-ը\n' +
+    '🔌 Սկսել լիցքավորումը - Սկսել նոր լիցքավորում\n' +
+    '🔌 Ավարտել լիցքավորումը - Ավարտել ընթացիկ լիցքավորումը',
     { parse_mode: 'Markdown', ...keyboard }
   );
+});
+
+bot.hears(['🔌 Սկսել լիցքավորումը', 'Start Charging'], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  if (!user) return ctx.reply('Խնդրում եմ գրանցվեք /start-ով');
+  
+  const activeSession = await db.select()
+    .from(sessions)
+    .where(and(
+      eq(sessions.userId, user.id),
+      eq(sessions.status, 'ACTIVE')
+    ));
+  
+  if (activeSession.length > 0) {
+    return ctx.reply('⚠️ Դուք արդեն ունեք ակտիվ լիցքավորում:\n' +
+      `🆔 ${activeSession[0].id}\n` +
+      'Խնդրում եմ նախ ավարտեք այն:');
+  }
+  
+  const locationsData = await db.execute(sql`SELECT * FROM locations WHERE publish = true`);
+  const locations = locationsData.rows || locationsData;
+  
+  if (locations.length === 0) {
+    return ctx.reply('📭 Կայաններ դեռ չկան');
+  }
+  
+  const keyboard = [];
+  for (const loc of locations) {
+    keyboard.push([Markup.button.callback(
+      `📍 ${loc.name}`,
+      `start_session_${loc.id}`
+    )]);
+  }
+  keyboard.push([Markup.button.callback('◀️ Հետ', 'back_to_fastcharge')]);
+  
+  await ctx.reply(
+    '🔌 *Ընտրեք կայանը լիցքավորման համար:*',
+    { parse_mode: 'Markdown', ...Markup.inlineKeyboard(keyboard) }
+  );
+});
+
+bot.action(/start_session_(.+)/, async (ctx) => {
+  const locationId = ctx.match[1];
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  if (!user) {
+    await ctx.answerCbQuery('Խնդրում եմ գրանցվեք /start-ով', { show_alert: true });
+    return;
+  }
+  
+  await ctx.answerCbQuery('⏳ Ուղարկվում է...');
+  await ctx.reply('⏳ Սկսում ենք լիցքավորումը, խնդրում եմ սպասեք...');
+  
+  try {
+    const response = await sendStartSession(user.id, locationId);
+    
+    if (response.status_code === 1000) {
+      await ctx.reply(
+        '✅ *Լիցքավորումը սկսվել է!*\n\n' +
+        '📍 Կարող եք գնալ կայան և միացնել մեքենան:\n' +
+        '🔌 Լիցքավորումն ավարտելուց հետո սեղմեք "Ավարտել լիցքավորումը"',
+        { parse_mode: 'Markdown' }
+      );
+    } else {
+      await ctx.reply(
+        '❌ *Սխալ:* ' + (response.status_message || 'Անհայտ սխալ'),
+        { parse_mode: 'Markdown' }
+      );
+    }
+  } catch (error) {
+    console.error('Start session error:', error);
+    await ctx.reply('❌ Տեխնիկական սխալ տեղի ունեցավ:');
+  }
+});
+
+bot.hears(['🔌 Ավարտել լիցքավորումը', 'Stop Charging'], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  if (!user) return ctx.reply('Խնդրում եմ գրանցվեք /start-ով');
+  
+  const activeSessions = await db.select()
+    .from(sessions)
+    .where(and(
+      eq(sessions.userId, user.id),
+      eq(sessions.status, 'ACTIVE')
+    ));
+  
+  if (activeSessions.length === 0) {
+    return ctx.reply('📭 Դուք չունեք ակտիվ լիցքավորումներ');
+  }
+  
+  const keyboard = [];
+  for (const s of activeSessions) {
+    const loc = await db.select().from(locations).where(eq(locations.id, s.locationId)).then(r => r[0]);
+    const locName = loc?.name || s.locationId || 'N/A';
+    const date = s.startDate ? new Date(s.startDate).toLocaleString() : 'N/A';
+    keyboard.push([Markup.button.callback(
+      `⚡ ${s.id.slice(0, 12)}... - ${locName} (${date})`,
+      `stop_session_${s.id}`
+    )]);
+  }
+  keyboard.push([Markup.button.callback('◀️ Հետ', 'back_to_fastcharge')]);
+  
+  await ctx.reply(
+    '🔌 *Ընտրեք ավարտելու session-ը:*',
+    { parse_mode: 'Markdown', ...Markup.inlineKeyboard(keyboard) }
+  );
+});
+
+bot.action(/stop_session_(.+)/, async (ctx) => {
+  const sessionId = ctx.match[1];
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  if (!user) {
+    await ctx.answerCbQuery('Խնդրում եմ գրանցվեք /start-ով', { show_alert: true });
+    return;
+  }
+  
+  await ctx.answerCbQuery('⏳ Ուղարկվում է...');
+  await ctx.reply('⏳ Ավարտում ենք լիցքավորումը, խնդրում եմ սպասեք...');
+  
+  try {
+    const response = await sendStopSession(sessionId);
+    
+    if (response.status_code === 1000) {
+      await ctx.reply(
+        '✅ *Լիցքավորումը ավարտվել է!*\n\n' +
+        '💰 Բոնուսները կհաշվարկվեն CDR-ի ստացումից հետո:\n' +
+        '💎 Ստուգեք ձեր բոնուսները /bonus հրամանով',
+        { parse_mode: 'Markdown' }
+      );
+    } else {
+      await ctx.reply(
+        '❌ *Սխալ:* ' + (response.status_message || 'Անհայտ սխալ'),
+        { parse_mode: 'Markdown' }
+      );
+    }
+  } catch (error) {
+    console.error('Stop session error:', error);
+    await ctx.reply('❌ Տեխնիկական սխալ տեղի ունեցավ:');
+  }
 });
 
 bot.hears(['📍 Կայաններ', 'FastCharge Locations'], async (ctx) => {
