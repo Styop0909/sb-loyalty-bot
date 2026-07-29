@@ -127,7 +127,7 @@ async function sendStartSession(userId, locationId) {
     
     const options = {
       hostname: 'api.fastcharge.company',
-      path: '/v2/ocpi/2.2.1/emsp/commands',
+      path: '/v2/ocpi/2.2.1/commands', 
       method: 'POST',
       headers: {
         'Authorization': `Token ${FAST_TOKEN}`,
@@ -143,32 +143,24 @@ async function sendStartSession(userId, locationId) {
       }
     });
     
-    console.log('📤 Sending START_SESSION to Fast Charge:');
-    console.log('Options:', options);
-    console.log('Data:', requestData);
+    console.log('📤 Sending START_SESSION to Fast Charge...');
     
     return new Promise((resolve, reject) => {
       const req = https.request(options, (res) => {
         let data = '';
         res.on('data', (chunk) => data += chunk);
         res.on('end', () => {
-          console.log('📥 Fast Charge response status:', res.statusCode);
-          console.log('📥 Fast Charge response data:', data);
+          console.log('📥 Fast Charge response:', res.statusCode, data);
           try {
             const response = JSON.parse(data);
             resolve(response);
           } catch (e) {
-            console.error('❌ Parse error:', e);
             reject(e);
           }
         });
       });
       
-      req.on('error', (e) => {
-        console.error('❌ Request error:', e);
-        reject(e);
-      });
-      
+      req.on('error', reject);
       req.write(requestData);
       req.end();
     });
@@ -184,7 +176,7 @@ async function sendStopSession(sessionId) {
   
   const options = {
     hostname: 'api.fastcharge.company',
-    path: '/v2/ocpi/2.2.1/emsp/commands',
+    path: '/v2/ocpi/2.2.1/commands',
     method: 'POST',
     headers: {
       'Authorization': `Token ${FAST_TOKEN}`,
