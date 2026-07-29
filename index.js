@@ -112,54 +112,70 @@ async function calculateBonusForUser(userId, totalCost, cdrId) {
 }
 
 async function sendStartSession(userId, locationId) {
-  const cdrToken = generateCdrToken(userId);
-  
-  await db.insert(sessionTokens).values({
-    userId: userId,
-    cdrToken: cdrToken,
-    status: 'pending',
-    locationId: locationId
-  });
-  
-  const FAST_TOKEN = process.env.FAST_CHARGE_TOKEN || 'WVh6RmRyNjZGSFVFUE44cWRENHUyTXpEa1cyQXdsdWdUNUNZRnk0STFIUVpVWWxBZzBraUZCbThYSHBtdnRWQg==';
-  const https = require('https');
-  
-  const options = {
-    hostname: 'api.fastcharge.company',
-    path: '/v2/ocpi/2.2.1/emsp/commands',
-    method: 'POST',
-    headers: {
-      'Authorization': `Token ${FAST_TOKEN}`,
-      'Content-Type': 'application/json'
-    }
-  };
-  
-  const requestData = JSON.stringify({
-    command: 'START_SESSION',
-    location_id: locationId,
-    cdr_token: {
-      token: cdrToken
-    }
-  });
-  
-  return new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => data += chunk);
-      res.on('end', () => {
-        try {
-          const response = JSON.parse(data);
-          resolve(response);
-        } catch (e) {
-          reject(e);
-        }
-      });
+  try {
+    const cdrToken = generateCdrToken(userId);
+    
+    await db.insert(sessionTokens).values({
+      userId: userId,
+      cdrToken: cdrToken,
+      status: 'pending',
+      locationId: locationId
     });
     
-    req.on('error', reject);
-    req.write(requestData);
-    req.end();
-  });
+    const FAST_TOKEN = process.env.FAST_CHARGE_TOKEN || 'WVh6RmRyNjZGSFVFUE44cWRENHUyTXpEa1cyQXdsdWdUNUNZRnk0STFIUVpVWWxBZzBraUZCbThYSHBtdnRWQg==';
+    const https = require('https');
+    
+    const options = {
+      hostname: 'api.fastcharge.company',
+      path: '/v2/ocpi/2.2.1/emsp/commands',
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${FAST_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    };
+    
+    const requestData = JSON.stringify({
+      command: 'START_SESSION',
+      location_id: locationId,
+      cdr_token: {
+        token: cdrToken
+      }
+    });
+    
+    console.log('📤 Sending START_SESSION to Fast Charge:');
+    console.log('Options:', options);
+    console.log('Data:', requestData);
+    
+    return new Promise((resolve, reject) => {
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => {
+          console.log('📥 Fast Charge response status:', res.statusCode);
+          console.log('📥 Fast Charge response data:', data);
+          try {
+            const response = JSON.parse(data);
+            resolve(response);
+          } catch (e) {
+            console.error('❌ Parse error:', e);
+            reject(e);
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        console.error('❌ Request error:', e);
+        reject(e);
+      });
+      
+      req.write(requestData);
+      req.end();
+    });
+  } catch (error) {
+    console.error('❌ sendStartSession error:', error);
+    throw error;
+  }
 }
 
 async function sendStopSession(sessionId) {
@@ -1906,6 +1922,8 @@ bot.action(/start_session_(.+)/, async (ctx) => {
   try {
     const response = await sendStartSession(user.id, locationId);
     
+    console.log('📥 START_SESSION response:', JSON.stringify(response, null, 2));
+    
     if (response.status_code === 1000) {
       await ctx.reply(
         '✅ *Լիցքավորումը սկսվել է!*\n\n' +
@@ -1914,17 +1932,23 @@ bot.action(/start_session_(.+)/, async (ctx) => {
         { parse_mode: 'Markdown' }
       );
     } else {
+      const errorMsg = response.status_message || response.status_description || 'Անհայտ սխալ';
       await ctx.reply(
-        '❌ *Սխալ:* ' + (response.status_message || 'Անհայտ սխալ'),
+        `❌ *Սխալ:* ${errorMsg}\n\n` +
+        `📋 Կոդ: ${response.status_code || 'N/A'}`,
         { parse_mode: 'Markdown' }
       );
     }
   } catch (error) {
-    console.error('Start session error:', error);
-    await ctx.reply('❌ Տեխնիկական սխալ տեղի ունեցավ:');
+    console.error('❌ Start session error:', error);
+    await ctx.reply(
+      `❌ *Տեխնիկական սխալ:*\n\n` +
+      `📝 ${error.message || 'Անհայտ սխալ'}\n\n` +
+      `🔧 Խնդրում եմ փորձեք կրկին կամ դիմեք ադմինին:`,
+      { parse_mode: 'Markdown' }
+    );
   }
 });
-
 bot.hears(['🔌 Ավարտել լիցքավորումը', 'Stop Charging'], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   if (!user) return ctx.reply('Խնդրում եմ գրանցվեք /start-ով');
@@ -1972,6 +1996,8 @@ bot.action(/stop_session_(.+)/, async (ctx) => {
   try {
     const response = await sendStopSession(sessionId);
     
+    console.log('📥 STOP_SESSION response:', JSON.stringify(response, null, 2));
+    
     if (response.status_code === 1000) {
       await ctx.reply(
         '✅ *Լիցքավորումը ավարտվել է!*\n\n' +
@@ -1980,14 +2006,21 @@ bot.action(/stop_session_(.+)/, async (ctx) => {
         { parse_mode: 'Markdown' }
       );
     } else {
+      const errorMsg = response.status_message || response.status_description || 'Անհայտ սխալ';
       await ctx.reply(
-        '❌ *Սխալ:* ' + (response.status_message || 'Անհայտ սխալ'),
+        `❌ *Սխալ:* ${errorMsg}\n\n` +
+        `📋 Կոդ: ${response.status_code || 'N/A'}`,
         { parse_mode: 'Markdown' }
       );
     }
   } catch (error) {
-    console.error('Stop session error:', error);
-    await ctx.reply('❌ Տեխնիկական սխալ տեղի ունեցավ:');
+    console.error('❌ Stop session error:', error);
+    await ctx.reply(
+      `❌ *Տեխնիկական սխալ:*\n\n` +
+      `📝 ${error.message || 'Անհայտ սխալ'}\n\n` +
+      `🔧 Խնդրում եմ փորձեք կրկին կամ դիմեք ադմինին:`,
+      { parse_mode: 'Markdown' }
+    );
   }
 });
 
