@@ -127,7 +127,7 @@ async function sendStartSession(userId, locationId) {
     
     const options = {
       hostname: 'api.fastcharge.company',
-      path: '/v2/ocpi/2.2.1/commands', 
+      path: '/v2/ocpi/2.2.1/cpo/commands',  // 👈 ՓՈԽԵԼ
       method: 'POST',
       headers: {
         'Authorization': `Token ${FAST_TOKEN}`,
