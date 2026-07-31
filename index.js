@@ -127,7 +127,7 @@ async function sendStartSession(userId, locationId) {
     
     const options = {
       hostname: 'api.fastcharge.company',
-      path: '/v2/ocpi/2.2.1/cpo/commands',  // 👈 ՓՈԽԵԼ
+      path: '/ocpi/cpo/2.2.1/commands/START_SESSION',  // 👈 ՃԻՇՏ
       method: 'POST',
       headers: {
         'Authorization': `Token ${FAST_TOKEN}`,
@@ -136,7 +136,6 @@ async function sendStartSession(userId, locationId) {
     };
     
     const requestData = JSON.stringify({
-      command: 'START_SESSION',
       location_id: locationId,
       cdr_token: {
         token: cdrToken
@@ -144,6 +143,8 @@ async function sendStartSession(userId, locationId) {
     });
     
     console.log('📤 Sending START_SESSION to Fast Charge...');
+    console.log('📤 Path:', options.path);
+    console.log('📤 Body:', requestData);
     
     return new Promise((resolve, reject) => {
       const req = https.request(options, (res) => {
@@ -176,7 +177,7 @@ async function sendStopSession(sessionId) {
   
   const options = {
     hostname: 'api.fastcharge.company',
-    path: '/v2/ocpi/2.2.1/cpo/commands',  // 👈 ՓՈԽԵԼ
+    path: '/ocpi/cpo/2.2.1/commands/STOP_SESSION',  // 👈 ՃԻՇՏ
     method: 'POST',
     headers: {
       'Authorization': `Token ${FAST_TOKEN}`,
@@ -185,15 +186,19 @@ async function sendStopSession(sessionId) {
   };
   
   const requestData = JSON.stringify({
-    command: 'STOP_SESSION',
     session_id: sessionId
   });
+  
+  console.log('📤 Sending STOP_SESSION to Fast Charge...');
+  console.log('📤 Path:', options.path);
+  console.log('📤 Body:', requestData);
   
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
       let data = '';
       res.on('data', (chunk) => data += chunk);
       res.on('end', () => {
+        console.log('📥 Fast Charge response:', res.statusCode, data);
         try {
           const response = JSON.parse(data);
           resolve(response);
