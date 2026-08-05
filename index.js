@@ -70,7 +70,53 @@ async function updateTokenStatus(cdrToken, status, sessionId) {
     })
     .where(eq(sessionTokens.cdrToken, cdrToken));
 }
-
+const QRCodeReader = require('qrcode-reader');
+const Jimp = require('jimp');
+async function decodeQR(fileId) {
+  try {
+    const fileLink = await bot.telegram.getFileLink(fileId);
+        const image = await Jimp.read(fileLink);
+        const qr = new QRCodeReader();
+    const value = await new Promise((resolve, reject) => {
+      qr.callback = (err, result) => {
+        if (err) reject(err);
+        else resolve(result);
+      };
+      qr.decode(image.bitmap);
+    });
+    
+    return value.result;
+  } catch (error) {
+    console.error('QR decode error:', error);
+    return null;
+  }
+}
+async function handleQRData(ctx, qrData) {
+  try {
+    const data = JSON.parse(qrData);
+    
+    if (data.type === 'fastcharge') {
+      const user = await db.select().from(users).where(eq(users.id, data.userId)).then(r => r[0]);
+      if (user) {
+        await ctx.reply(
+          `✅ *Գործընկերոջ QR-ը ճանաչվեց!*\n\n` +
+          `👤 ${user.firstName || user.username}\n` +
+          `🆔 ${user.id}\n\n` +
+          `💎 Դուք ստացաք +50 բոնուս:`,
+          { parse_mode: 'Markdown' }
+        );
+        
+        // Ավելացնել բոնուսներ
+        await db.update(users)
+          .set({ bonusBalance: sql`${users.bonusBalance} + 50` })
+          .where(eq(users.id, ctx.from.id));
+      }
+    }
+  } catch (error) {
+    console.error('Handle QR data error:', error);
+    await ctx.reply('❌ Սխալ QR-ի տվյալներ:');
+  }
+}
 async function calculateBonusForUser(userId, totalCost, cdrId) {
   const bonusAmount = Math.floor(totalCost * 0.05);
   if (bonusAmount <= 0) return;
@@ -1212,7 +1258,39 @@ bot.action('back_to_fastcharge', async (ctx) => {
   });
   await ctx.answerCbQuery();
 });
-
+bot.hears(['📷 Սկանավորել QR', '📷 Scan QR', '📷 Сканировать QR'], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  await ctx.reply(
+    getTranslation(lang, 'scanQRText'),
+    {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: '📷 Բացել QR սկաները',
+              callback_data: 'open_qr_scanner'
+            }
+          ],
+          [
+            {
+              text: '📱 Ուղարկել QR-ի նկարը',
+              callback_data: 'send_qr_photo'
+            }
+          ],
+          [
+            {
+              text: '◀️ Հետ',
+              callback_data: 'back_to_main'
+            }
+          ]
+        ]
+      }
+    }
+  );
+});
 bot.hears([getTranslation('hy', 'menu'), getTranslation('ru', 'menu'), getTranslation('en', 'menu')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
@@ -1317,7 +1395,67 @@ bot.action(/add_(\d+)/, async (ctx) => {
     await ctx.answerCbQuery('Սխալ, փորձեք կրկին').catch(() => {});
   }
 });
-
+// QR-ի սկանավորումը բացել
+bot.action('open_qr_scanner', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  // Telegram-ի QR scanner-ը բացելու համար
+  await ctx.reply(
+    getTranslation(lang, 'qrScannerInstructions'),
+    {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: '📷 Սկանավորել QR',
+              url: 'https://t.me/TuTak_Official_Bot?start=scan_qr' // QR-ի հղում
+            }
+          ],
+          [
+            {
+              text: '◀️ Հետ',
+              callback_data: 'back_to_scan_qr'
+            }
+          ]
+        ]
+      }
+    }
+  );
+  await ctx.answerCbQuery();
+});
+bot.action('send_qr_photo', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  await ctx.reply(
+    getTranslation(lang, 'sendQRPhotoInstructions'),
+    {
+      parse_mode: 'Markdown'
+    }
+  );
+  await ctx.answerCbQuery();
+});
+bot.on('photo', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+    const photo = ctx.message.photo[ctx.message.photo.length - 1];
+  const fileId = photo.file_id;
+  
+  await ctx.reply(
+    getTranslation(lang, 'qrProcessing'),
+    {
+      parse_mode: 'Markdown'
+    }
+  );
+  
+  // QR-ի decode-ից հետո
+  // const qrData = await decodeQR(fileId);
+  // if (qrData) {
+  //   await handleQRData(ctx, qrData);
+  // }
+});
 bot.action('back_to_categories', async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
