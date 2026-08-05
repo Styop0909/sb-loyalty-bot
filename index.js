@@ -106,7 +106,6 @@ async function handleQRData(ctx, qrData) {
           { parse_mode: 'Markdown' }
         );
         
-        // Ավելացնել բոնուսներ
         await db.update(users)
           .set({ bonusBalance: sql`${users.bonusBalance} + 50` })
           .where(eq(users.id, ctx.from.id));
@@ -1395,33 +1394,21 @@ bot.action(/add_(\d+)/, async (ctx) => {
     await ctx.answerCbQuery('Սխալ, փորձեք կրկին').catch(() => {});
   }
 });
-// QR-ի սկանավորումը բացել
 bot.action('open_qr_scanner', async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
   
-  // Telegram-ի QR scanner-ը բացելու համար
+  ctx.session.scanQR = true;
+  
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('◀️ Հետ', 'back_to_scan_qr')]
+  ]);
+  
   await ctx.reply(
-    getTranslation(lang, 'qrScannerInstructions'),
-    {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: '📷 Սկանավորել QR',
-              url: 'https://t.me/TuTak_Official_Bot?start=scan_qr' // QR-ի հղում
-            }
-          ],
-          [
-            {
-              text: '◀️ Հետ',
-              callback_data: 'back_to_scan_qr'
-            }
-          ]
-        ]
-      }
-    }
+    `📷 *Բացեք QR-ի սկաները*\n\n` +
+    `📱 Սեղմեք ներքևի կոճակը՝ QR-ը սկանավորելու համար:\n\n` +
+    `🔹 Դուք կարող եք նաև ուղարկել QR-ի նկարը:`,
+    { parse_mode: 'Markdown', ...keyboard }
   );
   await ctx.answerCbQuery();
 });
@@ -1429,32 +1416,67 @@ bot.action('send_qr_photo', async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
   
+  ctx.session.scanQR = true;
+  
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('◀️ Հետ', 'back_to_scan_qr')]
+  ]);
+  
   await ctx.reply(
-    getTranslation(lang, 'sendQRPhotoInstructions'),
-    {
-      parse_mode: 'Markdown'
-    }
+    `📱 *Ուղարկեք QR-ի նկարը*\n\n` +
+    `📷 Ուղարկեք QR-ի նկարը, և մենք կմշակենք այն:\n\n` +
+    `🔹 QR-ը սկանավորելուց հետո դուք կստանաք բոնուսներ:`,
+    { parse_mode: 'Markdown', ...keyboard }
   );
   await ctx.answerCbQuery();
 });
 bot.on('photo', async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
+  
+  if (ctx.session.scanQR) {
     const photo = ctx.message.photo[ctx.message.photo.length - 1];
-  const fileId = photo.file_id;
+    const fileId = photo.file_id;
+    
+    await ctx.reply(getTranslation(lang, 'qrProcessing'), { parse_mode: 'Markdown' });
+    
+    try {
+      const qrData = await decodeQR(fileId);
+      
+      if (qrData) {
+        await handleQRData(ctx, qrData);
+      } else {
+        await ctx.reply('❌ QR-ը չի ճանաչվել: Փորձեք նորից:');
+      }
+    } catch (error) {
+      console.error('QR processing error:', error);
+      await ctx.reply('❌ Սխալ QR-ի մշակման ժամանակ:');
+    }
+    
+    ctx.session.scanQR = false;
+  }
+});
+bot.action('back_to_scan_qr', async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  
+  ctx.session.scanQR = false;
+  
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('📷 Սկանավորել QR', 'open_qr_scanner')],
+    [Markup.button.callback('📱 Ուղարկել QR-ի նկարը', 'send_qr_photo')],
+    [Markup.button.callback('◀️ Հետ', 'back_to_main')]
+  ]);
   
   await ctx.reply(
-    getTranslation(lang, 'qrProcessing'),
-    {
-      parse_mode: 'Markdown'
-    }
+    `📷 *QR-ի սկանավորում*\n\n` +
+    `Ընտրեք եղանակը:\n\n` +
+    `📱 *Նկարով* - Ուղարկեք QR-ի նկարը\n` +
+    `📷 *Կամերայով* - Բացեք QR-ի սկաները\n\n` +
+    `🔹 QR-ը սկանավորելուց հետո դուք կստանաք բոնուսներ:`,
+    { parse_mode: 'Markdown', ...keyboard }
   );
-  
-  // QR-ի decode-ից հետո
-  // const qrData = await decodeQR(fileId);
-  // if (qrData) {
-  //   await handleQRData(ctx, qrData);
-  // }
+  await ctx.answerCbQuery();
 });
 bot.action('back_to_categories', async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
