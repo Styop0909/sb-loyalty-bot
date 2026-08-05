@@ -127,7 +127,7 @@ async function sendStartSession(userId, locationId) {
     
     const options = {
       hostname: 'api.fastcharge.company',
-      path: '/ocpi/cpo/2.2.1/commands/START_SESSION',  // 👈 ՃԻՇՏ
+      path: '/ocpi/cpo/2.2.1/commands/START_SESSION',
       method: 'POST',
       headers: {
         'Authorization': `Token ${FAST_TOKEN}`,
@@ -177,7 +177,7 @@ async function sendStopSession(sessionId) {
   
   const options = {
     hostname: 'api.fastcharge.company',
-    path: '/ocpi/cpo/2.2.1/commands/STOP_SESSION',  // 👈 ՃԻՇՏ
+    path: '/ocpi/cpo/2.2.1/commands/STOP_SESSION',
     method: 'POST',
     headers: {
       'Authorization': `Token ${FAST_TOKEN}`,
@@ -978,11 +978,19 @@ function mainMenu(lang) {
   const t = (key, ...args) => getTranslation(lang, key, ...args);
   return Markup.keyboard([
     [t('menu'), t('bonus')],
-    [t('referral'), t('myOrders')],
-    [t('changeCity'), t('changeLanguage')],
-    [t('partners'), t('cart')],
+    [t('referral'), t('more')],
+    [t('changeCity'), t('changeLanguage')]
+  ]).resize();
+}
+
+function moreMenu(lang) {
+  const t = (key, ...args) => getTranslation(lang, key, ...args);
+  return Markup.keyboard([
+    [t('myOrders'), t('partners')],
     [t('myStats'), t('buildingMaterials')],
-    ['🔌 Fast Charge', '📱 Mobile App']
+    [t('cart'), t('fastCharge')],
+    [t('scanQR')],
+    [t('backToMain')]
   ]).resize();
 }
 
@@ -1108,6 +1116,18 @@ bot.start(async (ctx) => {
   }
 });
 
+bot.hears([getTranslation('hy', 'more'), getTranslation('ru', 'more'), getTranslation('en', 'more')], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  await ctx.reply(getTranslation(lang, 'moreMenu'), moreMenu(lang));
+});
+
+bot.hears([getTranslation('hy', 'backToMain'), getTranslation('ru', 'backToMain'), getTranslation('en', 'backToMain')], async (ctx) => {
+  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
+  const lang = user?.language || 'hy';
+  await ctx.reply(getTranslation(lang, 'backToMain'), mainMenu(lang));
+});
+
 bot.hears([getTranslation('hy', 'partners'), getTranslation('ru', 'partners'), getTranslation('en', 'partners')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
@@ -1144,107 +1164,13 @@ bot.action(/partner_(\d+)/, async (ctx) => {
   let name = partner.name;
   if (lang === 'ru' && partner.nameRu) name = partner.nameRu;
   if (lang === 'en' && partner.nameEn) name = partner.nameEn;
-  if (partnerId === 1 || partner.name.toLowerCase().includes('fastcharge')) {
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('📍 Կայաններ', 'partner_locations')],
-      [Markup.button.callback('💰 Տարիֆներ', 'partner_tariffs')],
-      [Markup.button.callback('◀️ Հետ', 'back_to_partners')]
-    ]);
-    await ctx.reply(`🏢 *${name}*\n\nԸնտրեք բաժինը:`, {
-      parse_mode: 'Markdown',
-      ...keyboard
-    });
-  } else {
-    let text = `🏢 *${name}*\n\n`;
-    if (partner.description) text += `${partner.description}\n`;
-    if (partner.address) text += `📍 ${partner.address}\n`;
-    if (partner.phone) text += `📞 ${partner.phone}\n`;
-    text += `💰 Բոնուս: ${partner.commission}%`;
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('◀️ Հետ', 'back_to_partners')]
-    ]);
-    await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
-  }
-  await ctx.answerCbQuery();
-});
-
-bot.action('partner_locations', async (ctx) => {
-  const locationsData = await db.execute(sql`SELECT * FROM locations WHERE publish = true`);
-  const locations = locationsData.rows || locationsData;
-  if (locations.length === 0) {
-    return ctx.reply('📭 Կայաններ դեռ չկան');
-  }
-  let text = '🔌 *Լիցքավորման կայաններ*\n\n';
-  for (let i = 0; i < locations.length; i++) {
-    const loc = locations[i];
-    text += `${i + 1}. *${loc.name}*\n`;
-    if (loc.address) text += `📍 ${loc.address}\n`;
-    if (loc.city) text += `🏙️ ${loc.city}\n`;
-    let evses = [];
-    try {
-      evses = typeof loc.evses === 'string' ? JSON.parse(loc.evses) : loc.evses;
-    } catch (e) {
-      evses = [];
-    }
-    const connectors = evses.reduce((count, evse) => {
-      return count + (evse.connectors?.length || 0);
-    }, 0);
-    text += `🔌 ${connectors || 0} միացում`;
-    const isOnline = loc.is_online !== false;
-    text += isOnline ? '  🟢 *Հասանելի*' : '  🔴 *Անհասանելի*';
-    text += '\n\n';
-  }
-  if (text.length > 4000) {
-    text = text.slice(0, 3800) + '\n\n... և այլն';
-  }
+  let text = `🏢 *${name}*\n\n`;
+  if (partner.description) text += `${partner.description}\n`;
+  if (partner.address) text += `📍 ${partner.address}\n`;
+  if (partner.phone) text += `📞 ${partner.phone}\n`;
+  text += `💰 Բոնուս: ${partner.commission}%`;
   const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('◀️ Հետ', 'back_to_fastcharge')]
-  ]);
-  await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
-  await ctx.answerCbQuery();
-});
-
-bot.action('partner_tariffs', async (ctx) => {
-  const tariffsData = await db.select().from(tariffs);
-  if (tariffsData.length === 0) {
-    return ctx.reply('💰 Տարիֆներ դեռ չկան');
-  }
-  let text = '💰 *Սակագներ (Tariffs)*\n\n';
-  for (let i = 0; i < tariffsData.length; i++) {
-    const t = tariffsData[i];
-    let elements = [];
-    try {
-      elements = typeof t.elements === 'string' ? JSON.parse(t.elements) : t.elements;
-    } catch (e) {
-      elements = [];
-    }
-    let energyPrice = null;
-    let parkingPrice = null;
-    if (Array.isArray(elements) && elements.length > 0) {
-      for (const element of elements) {
-        if (element.price_components && Array.isArray(element.price_components)) {
-          for (const comp of element.price_components) {
-            if (comp.type === 'ENERGY') energyPrice = comp.price;
-            else if (comp.type === 'PARKING_TIME') parkingPrice = comp.price;
-          }
-        }
-      }
-    }
-    if (energyPrice === null && t.energy_price > 0) energyPrice = t.energy_price;
-    if (parkingPrice === null && t.parking_fee > 0) parkingPrice = t.parking_fee;
-    if (energyPrice === null) continue;
-    text += `🔹 *Տարբերակ ${i + 1}*\n`;
-    text += `⚡ ${energyPrice} ${t.currency || 'AMD'}/kWh`;
-    if (parkingPrice && parkingPrice > 0) {
-      text += `  •  🅿️ ${parkingPrice} ${t.currency || 'AMD'}/ժամ`;
-    }
-    text += '\n\n';
-  }
-  if (text.length > 4000) {
-    text = text.slice(0, 3800) + '\n\n... և այլն';
-  }
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('◀️ Հետ', 'back_to_fastcharge')]
+    [Markup.button.callback('◀️ Հետ', 'back_to_partners')]
   ]);
   await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
   await ctx.answerCbQuery();
@@ -1275,7 +1201,7 @@ bot.action('back_to_fastcharge', async (ctx) => {
   
   const keyboard = Markup.keyboard([
     ['📍 Կայաններ', '💰 Տարիֆներ'],
-    ['📊 Իմ սեսիաները', '📱 FastCharge QR'],
+    ['📊 Իմ սեսիաները'],
     ['🔌 Սկսել լիցքավորումը', '🔌 Ավարտել լիցքավորումը'],
     ['⬅️ Հետ']
   ]).resize();
@@ -1770,45 +1696,46 @@ bot.hears([getTranslation('hy', 'myOrders'), getTranslation('ru', 'myOrders'), g
   ctx.reply(text, { parse_mode: 'Markdown' });
 });
 
-bot.hears(['📱 Mobile App', 'Mobile App'], async (ctx) => {
+bot.hears([getTranslation('hy', 'myStats'), getTranslation('ru', 'myStats'), getTranslation('en', 'myStats')], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
-  const lang = user?.language || 'hy';
-  const text = 
-`📱 *TuTak Mobile App*
-
-Մենք աշխատում ենք մեր բջջային հավելվածի վրա:
-
-🚀 *Առանձնահատկություններ:*
-• Ավելի արագ պատվիրում
-• Push notifications
-• Face ID / Touch ID մուտք
-• Apple Pay / Google Pay
-• Real-time tracking
-• Ավելի լավ UI/UX
-
-⏳ *Թողարկում:* Շուտով
-
-📝 *Ցանկանու՞մ եք առաջիններից իմանալ թողարկման մասին:*
-Սեղմեք 🔔 կոճակը և մենք ձեզ կտեղեկացնենք:`;
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('🔔 Ծանուցել ինձ', 'notify_app_launch')],
-  ]);
-  await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
-});
-
-bot.action('notify_app_launch', async (ctx) => {
-  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
-  if (!user) {
-    await ctx.answerCbQuery('Խնդրում եմ գրանցվեք /start-ով', { show_alert: true });
-    return;
+  if (!user) return ctx.reply('Խնդրում եմ գրանցվեք /start-ով');
+  const lang = user.language || 'hy';
+  const totalEarnedImmediate = await db.select().from(bonusTransactions)
+    .where(and(eq(bonusTransactions.userId, user.id), eq(bonusTransactions.type, 'earn'), eq(bonusTransactions.bonusType, 'immediate')))
+    .then(r => r.reduce((sum, t) => sum + t.amount, 0));
+  const totalEarnedFrozen = await db.select().from(bonusTransactions)
+    .where(and(eq(bonusTransactions.userId, user.id), eq(bonusTransactions.type, 'earn'), eq(bonusTransactions.bonusType, 'frozen')))
+    .then(r => r.reduce((sum, t) => sum + t.amount, 0));
+  const totalSpent = await db.select().from(bonusTransactions)
+    .where(and(eq(bonusTransactions.userId, user.id), eq(bonusTransactions.type, 'spend')))
+    .then(r => r.reduce((sum, t) => sum + Math.abs(t.amount), 0));
+  const partnerBonuses = await db.select({
+    partnerName: partners.name,
+    partnerNameRu: partners.nameRu,
+    partnerNameEn: partners.nameEn,
+    totalBonus: sql`SUM(${userBonusesByPartner.bonusAmount})`
+  })
+  .from(userBonusesByPartner)
+  .leftJoin(partners, eq(userBonusesByPartner.partnerId, partners.id))
+  .where(eq(userBonusesByPartner.userId, user.id))
+  .groupBy(partners.id, partners.name, partners.nameRu, partners.nameEn);
+  let text = getTranslation(lang, 'statsTitle') + '\n\n';
+  text += getTranslation(lang, 'statsEarnedImmediate', totalEarnedImmediate) + '\n';
+  text += getTranslation(lang, 'statsEarnedFrozen', totalEarnedFrozen) + '\n';
+  text += getTranslation(lang, 'statsSpent', totalSpent) + '\n';
+  text += getTranslation(lang, 'statsBalance', user.bonusBalance) + '\n\n';
+  if (partnerBonuses.length > 0) {
+    text += getTranslation(lang, 'statsByPartners') + '\n\n';
+    for (let pb of partnerBonuses) {
+      let name = pb.partnerName;
+      if (lang === 'ru' && pb.partnerNameRu) name = pb.partnerNameRu;
+      if (lang === 'en' && pb.partnerNameEn) name = pb.partnerNameEn;
+      text += `• ${name}: ${pb.totalBonus} ֏\n`;
+    }
+  } else {
+    text += getTranslation(lang, 'statsNoPartners') + '\n';
   }
-  await db.execute(sql`
-    INSERT INTO app_notifications (user_id, created_at)
-    VALUES (${user.id}, NOW())
-    ON CONFLICT (user_id) DO NOTHING
-  `);
-  await ctx.answerCbQuery('✅ Դուք գրանցվել եք ծանուցումների համար!', { show_alert: true });
-  await ctx.reply('🎉 Շնորհակալություն! Մենք ձեզ կտեղեկացնենք, երբ հավելվածը թողարկվի:');
+  ctx.reply(text, { parse_mode: 'Markdown' });
 });
 
 bot.hears([getTranslation('hy', 'changeCity'), getTranslation('ru', 'changeCity'), getTranslation('en', 'changeCity')], async (ctx) => {
@@ -1848,7 +1775,7 @@ bot.hears(['🔌 Fast Charge', 'Fast Charge'], async (ctx) => {
   
   const keyboard = Markup.keyboard([
     ['📍 Կայաններ', '💰 Տարիֆներ'],
-    ['📊 Իմ սեսիաները', '📱 FastCharge QR'],
+    ['📊 Իմ սեսիաները'],
     ['🔌 Սկսել լիցքավորումը', '🔌 Ավարտել լիցքավորումը'],
     ['⬅️ Հետ']
   ]).resize();
@@ -1859,7 +1786,6 @@ bot.hears(['🔌 Fast Charge', 'Fast Charge'], async (ctx) => {
     '📍 Կայաններ - Տեսնել բոլոր կայանները\n' +
     '💰 Տարիֆներ - Տեսնել գները\n' +
     '📊 Իմ սեսիաները - Ձեր պատմությունը\n' +
-    '📱 FastCharge QR - Ձեր QR code-ը\n' +
     '🔌 Սկսել լիցքավորումը - Սկսել նոր լիցքավորում\n' +
     '🔌 Ավարտել լիցքավորումը - Ավարտել ընթացիկ լիցքավորումը',
     { parse_mode: 'Markdown', ...keyboard }
@@ -1946,6 +1872,7 @@ bot.action(/start_session_(.+)/, async (ctx) => {
     );
   }
 });
+
 bot.hears(['🔌 Ավարտել լիցքավորումը', 'Stop Charging'], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   if (!user) return ctx.reply('Խնդրում եմ գրանցվեք /start-ով');
@@ -2136,42 +2063,6 @@ bot.hears(['📊 Իմ սեսիաները', 'My FastCharge Sessions'], async (ctx
   await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
 });
 
-bot.hears(['📱 FastCharge QR', 'FastCharge QR'], async (ctx) => {
-  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
-  if (!user) return ctx.reply('Խնդրում եմ գրանցվեք /start-ով');
-  const qrData = {
-    type: 'fastcharge',
-    userId: user.id,
-    telegramId: user.telegramId,
-    username: user.username,
-    timestamp: Date.now()
-  };
-  const qrString = Buffer.from(JSON.stringify(qrData)).toString('base64');
-  const qrImage = await QRCode.toDataURL(qrString);
-  await ctx.replyWithPhoto(
-    { source: Buffer.from(qrImage.split(',')[1], 'base64') },
-    {
-      caption: 
-`📱 *Ձեր Fast Charge QR Code*
-
-Սա ձեր անձնական QR code-ն է Fast Charge-ի համար:
-
-🔹 *Ինչպես օգտագործել:*
-1. Գնացեք Fast Charge կայան
-2. Սկանավորեք այս QR code-ը
-3. Սկսեք լիցքավորումը
-4. Բոնուսները կհաշվարկվեն ավտոմատ
-
-👤 *User:* ${user.firstName || user.username}
-🆔 *ID:* ${user.id}
-💰 *Բոնուս:* 5% cashback
-
-*Պահպանեք այս QR code-ը ձեր հեռախոսում*`,
-      parse_mode: 'Markdown'
-    }
-  );
-});
-
 bot.hears(['⬅️ Հետ'], async (ctx) => {
   const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
   const lang = user?.language || 'hy';
@@ -2352,48 +2243,6 @@ bot.hears(['Հայերեն', 'Русский', 'English'], async (ctx) => {
   await db.update(users).set({ language: newLang }).where(eq(users.telegramId, ctx.from.id));
   const welcomeText = getTranslation(newLang, 'welcome');
   await ctx.reply(welcomeText, { parse_mode: 'Markdown', reply_markup: mainMenu(newLang).reply_markup });
-});
-
-bot.hears([getTranslation('hy', 'myStats'), getTranslation('ru', 'myStats'), getTranslation('en', 'myStats')], async (ctx) => {
-  const user = await db.select().from(users).where(eq(users.telegramId, ctx.from.id)).then(r => r[0]);
-  if (!user) return ctx.reply('Խնդրում եմ գրանցվեք /start-ով');
-  const lang = user.language || 'hy';
-  const totalEarnedImmediate = await db.select().from(bonusTransactions)
-    .where(and(eq(bonusTransactions.userId, user.id), eq(bonusTransactions.type, 'earn'), eq(bonusTransactions.bonusType, 'immediate')))
-    .then(r => r.reduce((sum, t) => sum + t.amount, 0));
-  const totalEarnedFrozen = await db.select().from(bonusTransactions)
-    .where(and(eq(bonusTransactions.userId, user.id), eq(bonusTransactions.type, 'earn'), eq(bonusTransactions.bonusType, 'frozen')))
-    .then(r => r.reduce((sum, t) => sum + t.amount, 0));
-  const totalSpent = await db.select().from(bonusTransactions)
-    .where(and(eq(bonusTransactions.userId, user.id), eq(bonusTransactions.type, 'spend')))
-    .then(r => r.reduce((sum, t) => sum + Math.abs(t.amount), 0));
-  const partnerBonuses = await db.select({
-    partnerName: partners.name,
-    partnerNameRu: partners.nameRu,
-    partnerNameEn: partners.nameEn,
-    totalBonus: sql`SUM(${userBonusesByPartner.bonusAmount})`
-  })
-  .from(userBonusesByPartner)
-  .leftJoin(partners, eq(userBonusesByPartner.partnerId, partners.id))
-  .where(eq(userBonusesByPartner.userId, user.id))
-  .groupBy(partners.id, partners.name, partners.nameRu, partners.nameEn);
-  let text = getTranslation(lang, 'statsTitle') + '\n\n';
-  text += getTranslation(lang, 'statsEarnedImmediate', totalEarnedImmediate) + '\n';
-  text += getTranslation(lang, 'statsEarnedFrozen', totalEarnedFrozen) + '\n';
-  text += getTranslation(lang, 'statsSpent', totalSpent) + '\n';
-  text += getTranslation(lang, 'statsBalance', user.bonusBalance) + '\n\n';
-  if (partnerBonuses.length > 0) {
-    text += getTranslation(lang, 'statsByPartners') + '\n\n';
-    for (let pb of partnerBonuses) {
-      let name = pb.partnerName;
-      if (lang === 'ru' && pb.partnerNameRu) name = pb.partnerNameRu;
-      if (lang === 'en' && pb.partnerNameEn) name = pb.partnerNameEn;
-      text += `• ${name}: ${pb.totalBonus} ֏\n`;
-    }
-  } else {
-    text += getTranslation(lang, 'statsNoPartners') + '\n';
-  }
-  ctx.reply(text, { parse_mode: 'Markdown' });
 });
 
 bot.hears('📦 Պատվերներ', async (ctx) => {
