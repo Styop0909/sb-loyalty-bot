@@ -25,8 +25,10 @@
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
     "helmet": "^7.0.0",
+    "jimp": "^0.22.12",
     "pg": "^8.21.0",
     "qrcode": "^1.5.3",
+    "qrcode-reader": "^1.0.4",
     "telegraf": "^4.16.3",
     "telegraf-session-local": "^2.1.1",
     "winston": "^3.11.0"
